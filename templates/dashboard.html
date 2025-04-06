@@ -2,58 +2,238 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>플레이어 통계 대시보드</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>마작 통계 대시보드</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 2rem;
+            background-color: #f9f9f9;
+        }
+        h1, h2 {
+            margin-top: 2rem;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+        th, td {
+            padding: 8px 12px;
+            border: 1px solid #ccc;
+            text-align: left;
+        }
+        th {
+            background-color: #eee;
+        }
+        select {
+            padding: 6px;
+            font-size: 1rem;
+        }
+    </style>
 </head>
 <body>
-    <h1>플레이어 통계 - 한벼리</h1>
-    
-    <canvas id="rankChart"></canvas>
-    <canvas id="winChart"></canvas>
+    <h1>마작 통계 대시보드</h1>
+
+    <label for="playerSelect">플레이어 선택:</label>
+    <select id="playerSelect">
+        <option value="">-- 선택하세요 --</option>
+    </select>
+
+    <div id="statsTableContainer"></div>
+
+    <h2>Yaku 달성 수</h2>
+    <div id="yakuTableContainer"></div>
 
     <script>
-        async function loadData() {
-            const response = await fetch('/stats/한벼리');
-            const data = await response.json();
+        const fields = {
+            "name": "플레이어",
+            "games": "대국 수",
+            "total_first_count": "1위율",
+            "total_second_count": "2위율",
+            "total_third_count": "3위율",
+            "total_fourth_count": "4위율",
+            "total.avg": "평균순위",
+            "east.avg": "동",
+            "south.avg": "남",
+            "west.avg": "서",
+            "north.avg": "북",
+            "endScore.avg": "최종 점수 평균",
+            "endScore.max": "최종 점수 최고",
+            "endScore.min": "최종 점수 최저",
+            "minusScore.avg": "토비율",
+            "minusScore.sum": "토탈 토비 수",
+            "minusOther.avg": "타가 들통률",
+            "minusOther.sum": "타가 들통 총합",
+            "minusOther.plr": "타가 들통 인원수",
+            "dora.avg": "평균 전체 도라갯수",
+            "dora.per": "전체 도라율",
+            "dora.max": "최대 전체 도라갯수",
+            "dora_outer.avg": "평균 도라갯수",
+            "dora_outer.per": "도라율",
+            "dora_outer.max": "최대 도라갯수",
+            "dora_inner.avg": "평균 뒷도라갯수",
+            "dora_inner.per": "뒷도라율",
+            "dora_inner.max": "최대 뒷도라갯수",
+            "dora_inner_eff.avg": "뒷도라 평균 변화점",
+            "dora_inner_eff.per": "뒷도라 유효율",
+            "dora_inner_eff.max": "뒷도라 최대 변화점",
+            "dora_akai.avg": "평균 적도라갯수",
+            "dora_akai.per": "적도라율",
+            "dora_akai.max": "최대 적도라갯수",
+            "winGame.avg": "화료율",
+            "winGame.len": "화료 수",
+            "winGame_score.avg": "평균 타점",
+            "winGame_score.max": "최대 타점",
+            "winGame_host.avg": "오야 평균 타점",
+            "winGame_host.max": "오야 최대 타점",
+            "winGame_host.per": "오야 화료율",
+            "winGame_zimo.avg": "쯔모 평균점",
+            "winGame_zimo.max": "쯔모 최대점",
+            "winGame_zimo.per": "쯔모율",
+            "winGame_rong.avg": "론 평균점",
+            "winGame_rong.max": "론 최대점",
+            "winGame_rong.per": "론율",
+            "winGame_fulu.avg": "후로 화료 평균",
+            "winGame_fulu.max": "후로 화료 최대",
+            "winGame_fulu.per": "후로 화료율",
+            "winGame_richi.avg": "리치 화료 평균",
+            "winGame_richi.max": "리치 화료 최대",
+            "winGame_richi.per": "리치 화료율",
+            "winGame_dama.avg": "다마 화료 평균",
+            "winGame_dama.max": "다마 화료 최대",
+            "winGame_dama.per": "다마율",
+            "winGame_round.avg": "평균 화료 순수",
+            "winGame_round.min": "최소 화료 순수",
+            "fulu.avg": "후로율",
+            "fulu.len": "후로 수",
+            "fulu_winGame.per": "후로시 화료율",
+            "fulu_score.avg": "후로 수지 평균",
+            "fulu_score.max": "후로 수지 최대",
+            "fulu_score.min": "후로 수지 최소",
+            "fulu_zimo.avg": "후로 쯔모 평균",
+            "fulu_zimo.max": "후로 쯔모 최대",
+            "fulu_zimo.per": "후로 쯔모율",
+            "fulu_rong.avg": "후로 론 평균",
+            "fulu_rong.max": "후로 론 최대",
+            "fulu_rong.per": "후로 론율",
+            "fulu_chong.avg": "후로 방총 평균",
+            "fulu_chong.min": "후로 방총 최소",
+            "fulu_chong.per": "후로 방총률",
+            "chong.avg": "방총률",
+            "chong.len": "방총 수",
+            "chong_score.avg": "평균 방총점",
+            "chong_score.min": "최소 방총점",
+            "chong_host.avg": "오야 방총 평균",
+            "chong_host.min": "오야 방총 최소",
+            "chong_host.per": "방총시 오야율",
+            "chong_fulu.avg": "방총시 후로 평균",
+            "chong_fulu.min": "방총시 후로 최소",
+            "chong_fulu.per": "방총시 후로율",
+            "chong_richi.avg": "방총시 리치 평균",
+            "chong_richi.min": "방총시 리치 최소",
+            "chong_richi.per": "방총시 리치율",
+            "dehost.avg": "오야카부리율",
+            "dehost.len": "오야카부리 수",
+            "dehost_score.avg": "오야카부리 평균점",
+            "dehost_score.min": "오야카부리 최소점",
+            "otherZimo.avg": "피쯔모율",
+            "otherZimo.len": "피쯔모 수",
+            "otherZimo_score.avg": "피쯔모 평균점",
+            "otherZimo_score.min": "피쯔모 최소점",
+            "richi.avg": "리치율",
+            "richi.len": "리치 수",
+            "richi_winGame.per": "리치 성공률",
+            "richi_score.avg": "리치 수지 평균",
+            "richi_score.min": "리치 수지 최소",
+            "richi_score.max": "리치 수지 최대",
+            "richi_yifa.avg": "일발 평균",
+            "richi_yifa.max": "일발 최대",
+            "richi_yifa.per": "일발률",
+            "richi_rong.avg": "리치 론 평균",
+            "richi_rong.max": "리치 론 최대",
+            "richi_rong.per": "리치시 론율",
+            "richi_zimo.avg": "리치 쯔모 평균",
+            "richi_zimo.max": "리치 쯔모 최대",
+            "richi_zimo.per": "리치시 쯔모율",
+            "richi_chong.avg": "리치 방총 평균",
+            "richi_chong.min": "리치 방총 최소",
+            "richi_chong.per": "리치시 방총률",
+            "richi_draw.per": "리치시 유국률",
+            "richi_otherZimo.avg": "리치시 타가 쯔모 평균",
+            "richi_otherZimo.min": "리치시 타가 쯔모 최소",
+            "richi_otherZimo.per": "리치시 타가 쯔모율",
+            "richi_machi.avg": "리치 대기 평균",
+            "richi_machi.per": "리치 다면율",
+            "richi_first.per": "리치 선제율"
+        };
 
-            console.log("Fetched Data:", data);  // 데이터 확인
+        document.getElementById('playerSelect').addEventListener('change', async function () {
+            const player = this.value;
+            const res = await fetch(`/stats/${encodeURIComponent(player)}`);
+            const data = await res.json();
 
-            // 순위별 횟수
-            const rankData = [
-                data["total_first_count"],
-                data["total_second_count"],
-                data["total_third_count"],
-                data["total_fourth_count"]
-            ];
+            const statsContainer = document.getElementById('statsTableContainer');
+            const yakuContainer = document.getElementById('yakuTableContainer');
+            statsContainer.innerHTML = "";
+            yakuContainer.innerHTML = "";
 
-            // 막대 그래프 (순위 비율)
-            new Chart(document.getElementById("rankChart"), {
-                type: "bar",
-                data: {
-                    labels: ["1st", "2nd", "3rd", "4th"],
-                    datasets: [{
-                        label: "순위별 게임 횟수",
-                        data: rankData,
-                        backgroundColor: ["#4CAF50", "#FFEB3B", "#FF9800", "#F44336"]
-                    }]
+            // 📊 통계 테이블 생성
+            const table = document.createElement('table');
+            const thead = table.createTHead();
+            const headRow = thead.insertRow();
+            headRow.insertCell().textContent = "항목";
+            headRow.insertCell().textContent = "값";
+
+            const tbody = table.createTBody();
+
+            Object.entries(fields).forEach(([key, label]) => {
+                const keys = key.split(".");
+                let value = data;
+                for (const k of keys) {
+                    value = value?.[k];
+                    if (value === undefined) break;
+                }
+                if (value !== undefined) {
+                    const row = tbody.insertRow();
+                    row.insertCell().textContent = label;
+                    row.insertCell().textContent = (typeof value === "number") ? value.toFixed(2) : value;
                 }
             });
 
-            // 원형 차트 (승률 & 평균 점수)
-            new Chart(document.getElementById("winChart"), {
-                type: "doughnut",
-                data: {
-                    labels: ["승률 (%)", "평균 점수"],
-                    datasets: [{
-                        data: [data["winGame"]["avg"] * 100, data["winGame_score"]["avg"]],
-                        backgroundColor: ["#2196F3", "#FFC107"]
-                    }]
-                }
-            });
-        }
+            statsContainer.appendChild(table);
 
-        loadData();
+            // 🀄 Yaku 테이블
+            const yakuData = data.yaku;
+            if (yakuData && typeof yakuData === "object") {
+                const yakuTable = document.createElement('table');
+                const yakuHead = yakuTable.createTHead();
+                const yakuHeadRow = yakuHead.insertRow();
+                yakuHeadRow.insertCell().textContent = "Yaku 이름";
+                yakuHeadRow.insertCell().textContent = "달성 수";
+
+                const yakuBody = yakuTable.createTBody();
+                Object.entries(yakuData).forEach(([yakuName, count]) => {
+                    const row = yakuBody.insertRow();
+                    row.insertCell().textContent = yakuName;
+                    row.insertCell().textContent = count;
+                });
+
+                yakuContainer.appendChild(yakuTable);
+            }
+        });
+
+        // 기본 플레이어 목록 로딩 예시
+        window.addEventListener('DOMContentLoaded', async () => {
+            const res = await fetch("/players");
+            const players = await res.json();
+            const select = document.getElementById("playerSelect");
+            players.forEach(p => {
+                const option = document.createElement("option");
+                option.value = p;
+                option.textContent = p;
+                select.appendChild(option);
+            });
+        });
     </script>
 </body>
 </html>
