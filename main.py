@@ -16,6 +16,11 @@ client = MongoClient(dbURL)  # 여기에 실제 MongoDB URI 입력
 db = client["logDB"]  # 사용할 데이터베이스 이름
 collection = db["gameLog"]  # 컬렉션 이름
 
+@app.route("/players")
+def get_players():
+    players = db.collection.find().distinct("name")  # MongoDB에서 name 필드 기준 유저 이름 목록 추출
+    return jsonify(players)
+
 # 전체 통계 데이터 반환
 @app.route("/stats", methods=["GET"])
 def get_stats():
