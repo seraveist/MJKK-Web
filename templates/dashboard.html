@@ -1,239 +1,363 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="ko"> 
 <head>
-    <meta charset="UTF-8">
-    <title>마작 통계 대시보드</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            padding: 2rem;
-            background-color: #f9f9f9;
-        }
-        h1, h2 {
-            margin-top: 2rem;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 1rem;
-        }
-        th, td {
-            padding: 8px 12px;
-            border: 1px solid #ccc;
-            text-align: left;
-        }
-        th {
-            background-color: #eee;
-        }
-        select {
-            padding: 6px;
-            font-size: 1rem;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <title>마작 통계 대시보드</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f4f6f9;
+      margin: 0;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    .stats-container {
+      max-width: 900px;
+      margin: auto;
+      background-color: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      padding: 24px;
+    }
+    table#statsTable {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 16px;
+    }
+    table#statsTable th {
+      text-align: center;
+      font-size: 16px;
+      background-color: #eaeaea;
+      color: #222;
+      padding: 12px 10px;
+    }
+    table#statsTable td {
+      padding: 10px;
+      border-bottom: 1px solid #ddd;
+      font-size: 14px;
+    }
+    table#statsTable tr:nth-child(even) td {
+      background-color: #f9f9f9;
+    }
+    table#statsTable tr:hover td {
+      background-color: #f1f1f1;
+    }
+    table#statsTable td:first-child {
+      color: #333;
+      font-weight: 500;
+    }
+    table#statsTable td:last-child {
+      text-align: center;
+      color: #000000;
+      font-weight: bold;
+    }
+    table#yakuTable {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 16px;
+    }
+    table#yakuTable th {
+      text-align: center;
+      font-size: 16px;
+      background-color: #eaeaea;
+      color: #222;
+      padding: 12px 10px;
+    }
+    table#yakuTable td {
+      padding: 10px;
+      border-bottom: 1px solid #ddd;
+      font-size: 14px;
+    }
+    table#yakuTable tr:nth-child(even) td {
+      background-color: #f9f9f9;
+    }
+    table#yakuTable tr:hover td {
+      background-color: #f1f1f1;
+    }
+    table#yakuTable td:first-child {
+      color: #333;
+      font-weight: 500;
+    }
+    table#yakuTable td:last-child {
+      text-align: center;
+      color: #000000;
+      font-weight: bold;
+    }
+    @media (max-width: 600px) {
+      .stats-container {
+        padding: 12px;
+      }
+      table#statsTable td, table#statsTable th {
+        font-size: 13px;
+        padding: 8px;
+      }
+    }
+  </style>
 </head>
 <body>
-    <h1>마작 통계 대시보드</h1>
+  <div class="stats-container">
+    <h1>MJKK 개인 통계</h1>
+  <label for="playerSelect">플레이어 :</label>
+  <select id="playerSelect"></select>
 
-    <label for="playerSelect">플레이어 선택:</label>
-    <select id="playerSelect">
-        <option value="">-- 선택하세요 --</option>
-    </select>
+  <table id="statsTable">
+    <thead>
+      <tr><th>항목</th><th>값</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
 
-    <div id="statsTableContainer"></div>
+  <h3>역 달성 내역</h3>
+  <table id="yakuTable">
+    <thead>
+      <tr>
+        <th>역 종류</th>
+        <th>달성 횟수</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- JS로 채움 -->
+    </tbody>
+  </table>
 
-    <h2>역 달성 수</h2>
-    <div id="yakuTableContainer"></div>
+  <script>
+    const display_keys = {
+    "games": { label: "대국 수", format: "int", category: "기본" },
+    "total.avg": { label: "평균순위", format: "float", category: "기본" },
+    "total_first_count": { label: "1위 횟수", format: "int", category: "기본" },
+    "total_second_count": { label: "2위 횟수", format: "int", category: "기본" },
+    "total_third_count": { label: "3위 횟수", format: "int", category: "기본" },
+    "total_fourth_count": { label: "4위 횟수", format: "int", category: "기본" },
+    "first_rate": { label: "1위율", format: "percent", category: "기본" },
+    "second_rate": { label: "2위율", format: "percent", category: "기본" },
+    "third_rate": { label: "3위율", format: "percent", category: "기본" },
+    "fourth_rate": { label: "4위율", format: "percent", category: "기본" },
+    "endScore.avg": { label: "최종 점수 평균", format: "int", category: "기본" },
+    "endScore.max": { label: "최종 점수 최고", format: "int", category: "기본" },
+    "endScore.min": { label: "최종 점수 최저", format: "int", category: "기본" },
+    "minusScore.avg": { label: "토비율", format: "percent", category: "기본" },
+    "minusOther.avg": { label: "타가 들통률", format: "percent", category: "기본" },
+    "east.avg": { label: "동 시작 평균 순위", format: "float", category: "기본" },
+    "south.avg": { label: "남 시작 평균 순위", format: "float", category: "기본" },
+    "west.avg": { label: "서 시작 평균 순위", format: "float", category: "기본" },
+    "north.avg": { label: "북 시작 평균 순위", format: "float", category: "기본" },
+    "dora.avg": { label: "평균 전체 도라갯수", format: "float", category: "도라" },
+    "dora_outer.avg": { label: "평균 도라갯수", format: "float", category: "도라" },
+    "dora_akai.avg": { label: "평균 적도라갯수", format: "float", category: "도라" },
+    "dora_inner.avg": { label: "평균 뒷도라갯수", format: "float", category: "도라" },
+    "dora.per": { label: "전체 도라율", format: "percent", category: "도라" },
+    "dora_outer.per": { label: "일반 도라율", format: "percent", category: "도라" },
+    "dora_akai.per": { label: "적도라율", format: "percent", category: "도라" },
+    "dora_inner.per": { label: "뒷도라율", format: "percent", category: "도라" },
+    "dora.max": { label: "최대 전체 도라갯수", format: "int", category: "도라" },
+    "dora_outer.max": { label: "최대 도라갯수", format: "int", category: "도라" },
+    "dora_akai.max": { label: "최대 적도라갯수", format: "int", category: "도라" },
+    "dora_inner.max": { label: "최대 뒷도라갯수", format: "int", category: "도라" },
+    "dora_inner_eff.avg": { label: "뒷도라 평균 변화점", format: "int", category: "도라" },
+    "dora_inner_eff.per": { label: "뒷도라 유효율", format: "percent", category: "도라" },
+    "dora_inner_eff.max": { label: "뒷도라 최대 변화점", format: "int", category: "도라" },
+    "winGame.avg": { label: "화료율", format: "percent", category: "화료 및 방총" },
+    "winGame_score.avg": { label: "평균 타점", format: "int", category: "화료 및 방총" },
+    "winGame_host.per": { label: "오야 화료율", format: "percent", category: "화료 및 방총" },
+    "winGame_zimo.per": { label: "쯔모율", format: "percent", category: "화료 및 방총" },
+    "winGame_dama.per": { label: "다마율", format: "percent", category: "화료 및 방총" },
+    "winGame_round.avg": { label: "평균 화료 순수", format: "float", category: "화료 및 방총" },
+    "chong.avg": { label: "방총률", format: "percent", category: "화료 및 방총" },
+    "chong_score.avg": { label: "평균 방총", format: "int", category: "화료 및 방총" },
+    "chong_host.per": { label: "방총시 오야율", format: "percent", category: "화료 및 방총" },
+    "chong_fulu.per": { label: "방총시 후로율", format: "percent", category: "화료 및 방총" },
+    "chong_richi.per": { label: "방총시 리치율", format: "percent", category: "화료 및 방총" },
+    "dehost.avg": { label: "오야카부리율", format: "percent", category: "화료 및 방총" },
+    "dehost_score.avg": { label: "오야카부리 평균", format: "int", category: "화료 및 방총" },
+    "otherZimo.avg": { label: "피쯔모율", format: "percent", category: "화료 및 방총" },
+    "richi.avg": { label: "리치율", format: "percent", category: "리치 및 후로" },
+    "richi_winGame.per": { label: "리치 성공률", format: "percent", category: "리치 및 후로" },
+    "richi_score.avg": { label: "리치 수지", format: "int", category: "리치 및 후로" },
+    "richi_yifa.per": { label: "일발률", format: "percent", category: "리치 및 후로" },
+    "richi_rong.per": { label: "리치시 론률", format: "percent", category: "리치 및 후로" },
+    "richi_zimo.per": { label: "리치시 쯔모율", format: "percent", category: "리치 및 후로" },
+    "richi_chong.per": { label: "리치시 방총률", format: "percent", category: "리치 및 후로" },
+    "richi_draw.per": { label: "리치시 유국률", format: "percent", category: "리치 및 후로" },
+    "richi_otherZimo.per": { label: "리치시 타가 쯔모율", format: "percent", category: "리치 및 후로" },
+    "richi_machi.per": { label: "리치 다면율", format: "percent", category: "리치 및 후로" },
+    "richi_first.per": { label: "리치 선제율", format: "percent", category: "리치 및 후로"  },
+    "fulu.avg": { label: "후로율", format: "percent", category: "리치 및 후로" },
+    "fulu_score.avg": { label: "후로 수지", format: "int", category: "리치 및 후로" },
+    "fulu_zimo.per": { label: "후로시 쯔모율", format: "percent", category: "리치 및 후로" },
+    "fulu_rong.per": { label: "후로시 론율", format: "percent", category: "리치 및 후로" },
+    "fulu_chong.per": { label: "후로시 방총률", format: "percent", category: "리치 및 후로" }
+    };
 
-    <script>
-        const fields = {
-            "name": "플레이어",
-            "games": "대국 수",
-            "total_first_count": "1위율",
-            "total_second_count": "2위율",
-            "total_third_count": "3위율",
-            "total_fourth_count": "4위율",
-            "total.avg": "평균순위",
-            "east.avg": "동",
-            "south.avg": "남",
-            "west.avg": "서",
-            "north.avg": "북",
-            "endScore.avg": "최종 점수 평균",
-            "endScore.max": "최종 점수 최고",
-            "endScore.min": "최종 점수 최저",
-            "minusScore.avg": "토비율",
-            "minusScore.sum": "토탈 토비 수",
-            "minusOther.avg": "타가 들통률",
-            "minusOther.sum": "타가 들통 총합",
-            "minusOther.plr": "타가 들통 인원수",
-            "dora.avg": "평균 전체 도라갯수",
-            "dora.per": "전체 도라율",
-            "dora.max": "최대 전체 도라갯수",
-            "dora_outer.avg": "평균 도라갯수",
-            "dora_outer.per": "도라율",
-            "dora_outer.max": "최대 도라갯수",
-            "dora_inner.avg": "평균 뒷도라갯수",
-            "dora_inner.per": "뒷도라율",
-            "dora_inner.max": "최대 뒷도라갯수",
-            "dora_inner_eff.avg": "뒷도라 평균 변화점",
-            "dora_inner_eff.per": "뒷도라 유효율",
-            "dora_inner_eff.max": "뒷도라 최대 변화점",
-            "dora_akai.avg": "평균 적도라갯수",
-            "dora_akai.per": "적도라율",
-            "dora_akai.max": "최대 적도라갯수",
-            "winGame.avg": "화료율",
-            "winGame.len": "화료 수",
-            "winGame_score.avg": "평균 타점",
-            "winGame_score.max": "최대 타점",
-            "winGame_host.avg": "오야 평균 타점",
-            "winGame_host.max": "오야 최대 타점",
-            "winGame_host.per": "오야 화료율",
-            "winGame_zimo.avg": "쯔모 평균점",
-            "winGame_zimo.max": "쯔모 최대점",
-            "winGame_zimo.per": "쯔모율",
-            "winGame_rong.avg": "론 평균점",
-            "winGame_rong.max": "론 최대점",
-            "winGame_rong.per": "론율",
-            "winGame_fulu.avg": "후로 화료 평균",
-            "winGame_fulu.max": "후로 화료 최대",
-            "winGame_fulu.per": "후로 화료율",
-            "winGame_richi.avg": "리치 화료 평균",
-            "winGame_richi.max": "리치 화료 최대",
-            "winGame_richi.per": "리치 화료율",
-            "winGame_dama.avg": "다마 화료 평균",
-            "winGame_dama.max": "다마 화료 최대",
-            "winGame_dama.per": "다마율",
-            "winGame_round.avg": "평균 화료 순수",
-            "winGame_round.min": "최소 화료 순수",
-            "fulu.avg": "후로율",
-            "fulu.len": "후로 수",
-            "fulu_winGame.per": "후로시 화료율",
-            "fulu_score.avg": "후로 수지 평균",
-            "fulu_score.max": "후로 수지 최대",
-            "fulu_score.min": "후로 수지 최소",
-            "fulu_zimo.avg": "후로 쯔모 평균",
-            "fulu_zimo.max": "후로 쯔모 최대",
-            "fulu_zimo.per": "후로 쯔모율",
-            "fulu_rong.avg": "후로 론 평균",
-            "fulu_rong.max": "후로 론 최대",
-            "fulu_rong.per": "후로 론율",
-            "fulu_chong.avg": "후로 방총 평균",
-            "fulu_chong.min": "후로 방총 최소",
-            "fulu_chong.per": "후로 방총률",
-            "chong.avg": "방총률",
-            "chong.len": "방총 수",
-            "chong_score.avg": "평균 방총점",
-            "chong_score.min": "최소 방총점",
-            "chong_host.avg": "오야 방총 평균",
-            "chong_host.min": "오야 방총 최소",
-            "chong_host.per": "방총시 오야율",
-            "chong_fulu.avg": "방총시 후로 평균",
-            "chong_fulu.min": "방총시 후로 최소",
-            "chong_fulu.per": "방총시 후로율",
-            "chong_richi.avg": "방총시 리치 평균",
-            "chong_richi.min": "방총시 리치 최소",
-            "chong_richi.per": "방총시 리치율",
-            "dehost.avg": "오야카부리율",
-            "dehost.len": "오야카부리 수",
-            "dehost_score.avg": "오야카부리 평균점",
-            "dehost_score.min": "오야카부리 최소점",
-            "otherZimo.avg": "피쯔모율",
-            "otherZimo.len": "피쯔모 수",
-            "otherZimo_score.avg": "피쯔모 평균점",
-            "otherZimo_score.min": "피쯔모 최소점",
-            "richi.avg": "리치율",
-            "richi.len": "리치 수",
-            "richi_winGame.per": "리치 성공률",
-            "richi_score.avg": "리치 수지 평균",
-            "richi_score.min": "리치 수지 최소",
-            "richi_score.max": "리치 수지 최대",
-            "richi_yifa.avg": "일발 평균",
-            "richi_yifa.max": "일발 최대",
-            "richi_yifa.per": "일발률",
-            "richi_rong.avg": "리치 론 평균",
-            "richi_rong.max": "리치 론 최대",
-            "richi_rong.per": "리치시 론율",
-            "richi_zimo.avg": "리치 쯔모 평균",
-            "richi_zimo.max": "리치 쯔모 최대",
-            "richi_zimo.per": "리치시 쯔모율",
-            "richi_chong.avg": "리치 방총 평균",
-            "richi_chong.min": "리치 방총 최소",
-            "richi_chong.per": "리치시 방총률",
-            "richi_draw.per": "리치시 유국률",
-            "richi_otherZimo.avg": "리치시 타가 쯔모 평균",
-            "richi_otherZimo.min": "리치시 타가 쯔모 최소",
-            "richi_otherZimo.per": "리치시 타가 쯔모율",
-            "richi_machi.avg": "리치 대기 평균",
-            "richi_machi.per": "리치 다면율",
-            "richi_first.per": "리치 선제율"
-        };
+    const yaku_name_map = {
+        "立直" : "리치",
+        "両立直" : "더블리치",
+        "門前清自摸和" : "멘젠쯔모",
+        "嶺上開花" : "영상개화",
+        "海底摸月" : "해저로월",
+        "河底撈魚" : "하저로어",
+        "一発" : "일발",
+        "ドラ" : "도라",
+        "赤ドラ" : "적도라",
+        "裏ドラ" : "뒷도라",
+        "平和" : "핑후",
+        "断幺九" : "탕야오",
+        "一気通貫" : "일기통관",
+        "一盃口" : "이페코",
+        "二盃口	" : "량페코",
+        "三色同順" : "삼색동순",
+        "三色同刻" : "삼색동각",
+        "混全帯幺九" : "찬타",
+        "純全帯幺九	" : "준찬타",
+        "混老頭	" : "혼노두",
+        "混一色" : "혼일색",
+        "清一色" : "청일색",
+        "七対子" : "치또이츠",
+        "対々和" : "또이또이",
+        "三暗刻" : "산안커",
+        "自風 東" : "자풍 동",
+        "自風 南" : "자풍 남",
+        "自風 西" : "자풍 서",
+        "自風 北" : "자풍 북",
+        "場風 東" : "장풍 동",
+        "場風 南" : "장풍 남",
+        "役牌 白" : "역패 백",
+        "役牌 發" : "역패 발",
+        "役牌 中" : "역패 중",
+        "小三元" : "소삼원",
+        "槍槓" : "창깡",
+        "三杠子" : "산깡즈",
+        "流し満貫" : "유국 만관",
+        "数え役満" : "헤아림 역만",
+        "天地创世" : "천지화",
+        "国士無双" : "국사무쌍",
+        "四暗刻" : "스안커",
+        "大三元" : "대삼원",
+        "小四喜" : "소사희",
+        "字一色" : "자일색",
+        "绿一色" : "녹일색",
+        "清老頭	" : "청노두",
+        "九莲宝灯" : "구련보등",
+        "国士無双十三面待ち" : "국사무쌍 13면 대기",
+        "四暗刻单骑" : "스안커 단기",
+        "大四喜" : "대사희",
+        "纯正九莲宝灯" : "순정구련보등"
+    };
 
-        document.getElementById('playerSelect').addEventListener('change', async function () {
-            const player = this.value;
-            const res = await fetch(`/stats/${encodeURIComponent(player)}`);
-            const data = await res.json();
+    function renderTable(stats) {
+      const tbody = document.querySelector("#statsTable tbody");
+      tbody.innerHTML = "";
 
-            const statsContainer = document.getElementById('statsTableContainer');
-            const yakuContainer = document.getElementById('yakuTableContainer');
-            statsContainer.innerHTML = "";
-            yakuContainer.innerHTML = "";
+      // ✅ 비율 계산용 처리
+      const totalGames = stats.games || 0;
+      if (totalGames > 0) {
+        stats.first_rate = stats.total_first_count / totalGames;
+        stats.second_rate = stats.total_second_count / totalGames;
+        stats.third_rate = stats.total_third_count / totalGames;
+        stats.fourth_rate = stats.total_fourth_count / totalGames;
+      }
 
-            // 📊 통계 테이블 생성
-            const table = document.createElement('table');
-            const thead = table.createTHead();
-            const headRow = thead.insertRow();
-            headRow.insertCell().textContent = "항목";
-            headRow.insertCell().textContent = "값";
+      let currentCategory = "";
+      for (const [key, { label, format, category }] of Object.entries(display_keys)) {
+        const value = key.split('.').reduce((o, i) => (o ? o[i] : undefined), stats);
+        if (value !== undefined) {
+          if (category && category !== currentCategory) {
+            const headerRow = document.createElement("tr");
+            const headerCell = document.createElement("td");
+            headerCell.colSpan = 2;
+            headerCell.className = "category-header";
+            headerCell.textContent = category;
+            headerRow.appendChild(headerCell);
+            tbody.appendChild(headerRow);
+            currentCategory = category;
+          }
 
-            const tbody = table.createTBody();
-
-            Object.entries(fields).forEach(([key, label]) => {
-                const keys = key.split(".");
-                let value = data;
-                for (const k of keys) {
-                    value = value?.[k];
-                    if (value === undefined) break;
-                }
-                if (value !== undefined) {
-                    const row = tbody.insertRow();
-                    row.insertCell().textContent = label;
-                    row.insertCell().textContent = (typeof value === "number") ? value.toFixed(2) : value;
-                }
-            });
-
-            statsContainer.appendChild(table);
-
-            // 🀄 Yaku 테이블
-            const yakuData = data.yaku;
-            if (yakuData && typeof yakuData === "object") {
-                const yakuTable = document.createElement('table');
-                const yakuHead = yakuTable.createTHead();
-                const yakuHeadRow = yakuHead.insertRow();
-                yakuHeadRow.insertCell().textContent = "역 이름";
-                yakuHeadRow.insertCell().textContent = "달성 수";
-
-                const yakuBody = yakuTable.createTBody();
-                Object.entries(yakuData).forEach(([yakuName, count]) => {
-                    const row = yakuBody.insertRow();
-                    row.insertCell().textContent = yakuName;
-                    row.insertCell().textContent = count;
-                });
-
-                yakuContainer.appendChild(yakuTable);
+          const row = document.createElement("tr");
+          let formatted = "";
+          if (typeof value === "number") {
+            switch (format) {
+              case "int": formatted = Math.floor(value).toLocaleString(); break;
+              case "float": formatted = value.toFixed(2); break;
+              case "percent": formatted = (value * 100).toFixed(2) + "%"; break;
+              default: formatted = value;
             }
-        });
+          } else {
+            formatted = value;
+          }
+          row.innerHTML = `<td>${label}</td><td>${formatted}</td>`;
+          tbody.appendChild(row);
+        }
+      }
+    }
 
-        // 기본 플레이어 목록 로딩 예시
-        window.addEventListener('DOMContentLoaded', async () => {
-            const res = await fetch("/players");
-            const players = await res.json();
-            const select = document.getElementById("playerSelect");
-            players.forEach(p => {
-                const option = document.createElement("option");
-                option.value = p;
-                option.textContent = p;
-                select.appendChild(option);
-            });
+
+    function renderYakus(yakusArray) {
+      const yakuTableBody = document.querySelector("#yakuTable tbody");
+      yakuTableBody.innerHTML = "";
+
+      if (!yakusArray || !Array.isArray(yakusArray)) {
+        yakuTableBody.innerHTML = "<tr><td colspan='2'>데이터 없음</td></tr>";
+        return;
+      }
+
+      // 기존 yakus 데이터를 객체로 변환 (이름 기준으로 빠르게 접근하기 위해)
+      const yakusMap = Object.fromEntries(yakusArray.map(([count, name]) => [name.trim(), count]));
+
+      // yaku_name_map 순서대로, 없으면 count = 0
+      const sortedYakus = Object.keys(yaku_name_map).map(name => {
+        return [yakusMap[name] || 0, name];
+      });
+
+      // 테이블 렌더링
+      sortedYakus.forEach(([count, yaku]) => {
+        const row = document.createElement("tr");
+        const nameCell = document.createElement("td");
+        const countCell = document.createElement("td");
+        nameCell.textContent = yaku_name_map[yaku] || yaku;
+        countCell.textContent = count.toLocaleString();
+        row.appendChild(nameCell);
+        row.appendChild(countCell);
+        yakuTableBody.appendChild(row);
+      });
+    }
+
+
+    document.addEventListener("DOMContentLoaded", () => {
+      const select = document.getElementById("playerSelect");
+      fetch("/stats/all")
+        .then((res) => res.json())
+        .then((data) => {
+          data.allPlayers.forEach((player) => {
+            const option = document.createElement("option");
+            option.value = player;
+            option.textContent = player;
+            select.appendChild(option);
+          });
+          if (data.allPlayers.length > 0) {
+            select.value = data.allPlayers[0];
+            loadStats(data.allPlayers[0]);
+          }
         });
-    </script>
+      select.addEventListener("change", () => {
+        loadStats(select.value);
+      });
+    });
+
+  function loadStats(player) {
+    fetch(`/stats/${player}`)
+      .then((res) => res.json())
+      .then((data) => {
+        const stats = data.stats || data.data;
+        if (!stats) return;
+
+        renderTable(stats);
+        renderYakus(stats.yakus);
+      });
+  }
+
+  </script>
+  </div>
 </body>
 </html>

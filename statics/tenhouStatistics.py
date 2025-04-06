@@ -92,7 +92,7 @@ class PlayerStatistic(object):
     def __init__(self, games, playerName):
         super(PlayerStatistic, self).__init__()
         self.games = games
-        self.playerName = playerName
+        self.playerName = playerName.get('name')
 
         self.rank                    = Statistic()          #평균순위,1234위율
         self.east_rank               = Statistic()          #동가_시작_평균순위,1234위율
@@ -148,7 +148,7 @@ class PlayerStatistic(object):
         self.yakus = dict()
 
         for game in self.games:
-            playerIndex = game.getPlayerIndex_ByName(playerName)
+            playerIndex = game.getPlayerIndex_ByName(playerName.get('list'))
             if playerIndex == -1:
                 continue
 
