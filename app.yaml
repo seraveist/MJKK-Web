@@ -1,0 +1,9 @@
+runtime: python312  # 사용 중인 Python 버전에 맞게
+entrypoint: gunicorn -b :$PORT main:app
+
+handlers:
+  - url: /static
+    static_dir: static
+
+  - url: /.*
+    script: auto
