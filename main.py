@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, render_template, redirect
+from flask import Flask, jsonify, request, render_template, redirect, url_for
 from pymongo import MongoClient
 from statics import tenhouStatistics
 from statics import tenhouLog
@@ -12,14 +12,12 @@ dbPassword = "kCij9L7lZRAeDPiV"
 dbURL = "mongodb+srv://"+ dbUser +":" + dbPassword + "@cluster0.6nqoq8u.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
 
 userData = [
-    { 'name' : 'N@Gi', 'list' : ['N@Gi', 'cloudsin'] },
     { 'name' : 'Kns2', 'list' : ['Kns2', 'ganado'] },
     { 'name' : 'HorTeNsiA', 'list' : ['HorTeNsiA', '筒美絹香'] },
     { 'name' : 'jongja', 'list' : ['jongja'] },
     { 'name' : 'ARKANA', 'list' : ['ARKANA', 'BingHayu'] },
     { 'name' : 'N@Gi', 'list' : ['N@Gi', 'cloudsin'] },
     { 'name' : 'セラビー', 'list' : ['セラビー', 'ラビビビ'] },
-    { 'name' : '한벼리', 'list' : ['한벼리'] },
     { 'name' : 'SinYoA', 'list' : ['SinYoA', 'RyuYoA'] },
     { 'name' : '한벼리', 'list' : ['한벼리'] },
     { 'name' : '맬렁호랭이', 'list' : ['맬렁호랭이'] },
@@ -67,7 +65,7 @@ def get_player_stats(player_name):
 
 @app.route("/")
 def index():
-    return redirect("/dashboard")
+    return redirect(url_for("dashboard"))
 
 @app.route("/dashboard")
 def dashboard():
