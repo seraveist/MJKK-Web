@@ -7,7 +7,6 @@ import json
 
 app = Flask(__name__)
 
-
 dbUser = "logUpdater"
 dbPassword = "kCij9L7lZRAeDPiV"
 dbURL = "mongodb+srv://"+ dbUser +":" + dbPassword + "@cluster0.6nqoq8u.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
@@ -42,4 +41,4 @@ def dashboard():
     return render_template("dashboard.html")
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=8080, debug=True)
