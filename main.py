@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request, render_template
+from flask import Flask, jsonify, request, render_template, redirect
 from pymongo import MongoClient
 from statics import tenhouStatistics
 from statics import tenhouLog
@@ -64,6 +64,10 @@ def get_player_stats(player_name):
         })
     else:
         return jsonify({"error": "Player not found"}), 404        
+
+@app.route("/")
+def index():
+    return redirect("/dashboard")
 
 @app.route("/dashboard")
 def dashboard():
