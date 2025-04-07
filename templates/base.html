@@ -42,12 +42,16 @@
       border-radius: 12px;
       box-shadow: 0 4px 12px rgba(0,0,0,0.1);
       padding: 24px;
+      overflow-x: auto;
     }
+
     table {
       width: 100%;
       border-collapse: collapse;
       margin-top: 16px;
+      table-layout: auto;
     }
+
     th {
       text-align: center;
       font-size: 16px;
@@ -55,38 +59,54 @@
       color: #222;
       padding: 12px 10px;
     }
+
     td {
       padding: 10px;
       border-bottom: 1px solid #ddd;
       font-size: 14px;
     }
+
     tr:nth-child(even) td {
       background-color: #f9f9f9;
     }
+
     tr:hover td {
       background-color: #f1f1f1;
     }
+
     td:first-child {
       color: #333;
       font-weight: 500;
     }
+
     td:last-child {
       text-align: center;
       color: #000000;
       font-weight: bold;
     }
+
     #rankingTable {
       width: 100%;
       border-collapse: collapse;
       margin-top: 24px;
     }
-    #rankingTable th, #rankingTable td {
+
+    #rankingTable th,
+    #rankingTable td {
       padding: 10px;
       border: 1px solid #ccc;
       text-align: center;
     }
+
     #rankingTable tr:nth-child(even) {
       background-color: #f9f9f9;
+    }
+
+    /* 날짜별 점수 테이블 */
+    #dateScoreTable {
+      min-width: 900px;
+      border-collapse: collapse;
+      table-layout: fixed;
     }
 
     #dateScoreTable td,
@@ -95,37 +115,49 @@
       font-size: 14px;
       text-align: center;
       padding: 6px 10px;
-    }
-
-    /* 헤더 스타일: 유저명 컬럼에만 적용될 수 있도록 조정 */
-    #dateScoreTable thead th:not(:first-child) {
-      font-size: 12px;
       white-space: nowrap;
     }
 
-    /* 날짜 컬럼은 왼쪽 정렬 */
+    #dateScoreTable thead th:not(:first-child) {
+      font-size: 12px;
+    }
+
     #dateScoreTable td:first-child,
     #dateScoreTable th:first-child {
       text-align: left;
       padding-left: 12px;
-      font-size: 14px; /* 날짜는 상대적으로 더 크게 유지 */
+      font-size: 14px;
       font-weight: bold;
+      white-space: nowrap;
+    }
+
+    .table-scroll-wrapper {
+      overflow-x: auto;
+      width: 100%;
+      display: block;
+      -webkit-overflow-scrolling: touch;
     }
 
     @media (max-width: 600px) {
       .stats-container {
         padding: 12px;
       }
-      td, th {
+
+      td,
+      th {
         font-size: 13px;
         padding: 8px;
+      }
+
+      #dateScoreTable {
+        font-size: 12px;
       }
     }
   </style>
 </head>
 <body>
   <nav>
-    <a href="/">홈</a>
+    <a href="/">대시보드</a>
     <a href="/stats">개인 통계</a>
   </nav>
   {% block content %}{% endblock %}
