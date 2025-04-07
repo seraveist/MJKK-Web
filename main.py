@@ -63,13 +63,71 @@ def get_player_stats(player_name):
     else:
         return jsonify({"error": "Player not found"}), 404        
 
+@app.route("/ranking")
+def get_ranking():
+    data = list(collection.find())
+    player_scores = {}
+    daily_scores = {}
+
+    for user in userData:
+        player_scores[user["name"]] = {
+            "point_sum": 0,
+            "games": 0,
+            "point_avg": 0
+        }
+
+    for log in data:
+        date = log["ref"]
+        if date not in daily_scores:
+            daily_scores[date] = {}
+
+        for i in range(4):
+            name = log["name"][i]
+            point = log["sc"][i * 2 + 1]
+
+            matched_name = None
+            for user in userData:
+                if name in user["list"]:
+                    matched_name = user["name"]
+                    break
+
+            if matched_name:
+                player_scores[matched_name]["point_sum"] += point
+                player_scores[matched_name]["games"] += 1
+                daily_scores[date][matched_name] = point
+
+    # 평균 계산
+    for player in player_scores:
+        games = player_scores[player]["games"]
+        if games > 0:
+            player_scores[player]["point_avg"] = round(player_scores[player]["point_sum"] / games, 2)
+
+    # ✅ 리스트로 변환 후 정렬
+    ranking_list = [
+        {
+            "name": name,
+            **stats
+        }
+        for name, stats in player_scores.items()
+    ]
+    ranking_list.sort(key=lambda x: (-x["games"], -x["point_avg"]))
+
+    return jsonify({
+        "ranking": ranking_list,
+        "players": [user["name"] for user in userData],
+        "daily": [
+            {"date": k.split("-")[0], "points": v}
+            for k, v in sorted(daily_scores.items())
+        ]
+    })
+
 @app.route("/")
 def index():
-    return redirect(url_for("dashboard"))
+    return render_template("index.html")
 
-@app.route("/dashboard")
+@app.route("/stats")
 def dashboard():
-    return render_template("dashboard.html")
+    return render_template("stats.html")
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080, debug=True)
