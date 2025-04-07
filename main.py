@@ -117,7 +117,7 @@ def get_ranking():
         "players": [user["name"] for user in userData],
         "daily": [
             {"date": k.split("-")[0], "points": v}
-            for k, v in sorted(daily_scores.items())
+            for k, v in sorted(daily_scores.items(), reverse= True)
         ]
     })
 
@@ -130,4 +130,4 @@ def dashboard():
     return render_template("stats.html")
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080, debug=True)
+    app.run(host="0.0.0.0", port=8000, debug=True)

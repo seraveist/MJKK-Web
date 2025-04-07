@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+{% block title %}MJKK 대시보드{% endblock %}
+{% block content %}
+<div class="stats-container">
+  <h1>🀄 시즌 대시보드</h1>
+  <table id="rankingTable">
+    <thead>
+      <tr>
+        <th>유저명</th>
+        <th>대국 수</th>
+        <th>우마 합산</th>
+        <th>우마 평균</th>
+      </tr>
+    </thead>
+    <tbody id="rankingBody"></tbody>
+  </table>
+
+<div class="table-scroll-wrapper">
+  <table id="dateScoreTable">
+    <thead id="dateScoreHeader">
+      <tr><th>날짜</th></tr>
+    </thead>
+    <tbody id="dateScoreBody"></tbody>
+  </table>
+</div>
+
+<script>
+  async function loadRanking() {
+    const res = await fetch("/ranking");
+    const data = await res.json();
+
+    const rankingTable = document.getElementById("rankingBody");
+    rankingTable.innerHTML = "";
+
+    data.ranking.forEach(player => {
+      const row = document.createElement("tr");
+      row.innerHTML = `
+        <td>${player.name}</td>
+        <td>${player.games}</td>
+        <td>${player.point_sum.toFixed(2)}</td>
+        <td>${player.point_avg.toFixed(2)}</td>
+      `;
+      rankingTable.appendChild(row);
+    });
+
+    // 날짜별 테이블 생성
+    const headerRow = document.getElementById("dateScoreHeader").firstElementChild;
+    data.players.forEach(name => {
+      const th = document.createElement("th");
+      th.textContent = name;
+      headerRow.appendChild(th);
+    });
+
+    const body = document.getElementById("dateScoreBody");
+    data.daily.forEach(entry => {
+      const row = document.createElement("tr");
+      const dateCell = document.createElement("td");
+      dateCell.textContent = entry.date.split("-")[0];
+      row.appendChild(dateCell);
+
+      data.players.forEach(name => {
+        const td = document.createElement("td");
+        td.textContent = entry.points[name] !== undefined ? entry.points[name].toFixed(2) : "-";
+        row.appendChild(td);
+      });
+
+      body.appendChild(row);
+    });
+  }
+
+  loadRanking();
+</script>
+{% endblock %}
