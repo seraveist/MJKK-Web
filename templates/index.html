@@ -1,8 +1,25 @@
 {% extends 'base.html' %}
-{% block title %}MJKK 대시보드{% endblock %}
 {% block content %}
+
+<div id="loading" class="loading-overlay" style="display: none;">
+  <div class="spinner"></div>
+</div>
+
 <div class="stats-container">
-  <h1>🀄 시즌 대시보드</h1>
+
+  <h1>🀄 마자까까 대시보드</h1>
+
+  <div class="season-tabs">
+    {% for s in available_seasons %}
+    <button class="tab {% if s|string == season|string %}active{% endif %}" data-season="{{ s }}">
+      시즌 {{ s }}
+    </button>
+  {% endfor %}
+  <button class="tab {% if season == 'all' %}active{% endif %}" data-season="all">전체</button>
+  </div>
+
+  <div class="separator"></div>
+
   <table id="rankingTable">
     <thead>
       <tr>
@@ -15,60 +32,127 @@
     <tbody id="rankingBody"></tbody>
   </table>
 
-<div class="table-scroll-wrapper">
-  <h1 style="margin-top: 40px;">📅 날짜별 점수 기록</h1>
-  <table id="dateScoreTable">
-    <thead id="dateScoreHeader">
-      <tr><th>날짜</th></tr>
-    </thead>
-    <tbody id="dateScoreBody"></tbody>
-  </table>
+  <div class="separator"></div>
+  
+  <h1>📅 날짜별 점수 기록</h1>
+  <!-- 날짜별 점수 기록 테이블 영역에 vertical scroll 추가 -->
+  <div class="table-scroll-wrapper" style="max-height: 400px; overflow-y: auto;">
+    <table id="dateScoreTable">
+      <thead id="dateScoreHeader">
+        <tr><th>날짜</th></tr>
+      </thead>
+      <tbody id="dateScoreBody"></tbody>
+    </table>
+  </div>
 </div>
 
 <script>
-  async function loadRanking() {
-    const res = await fetch("/ranking");
-    const data = await res.json();
+  document.addEventListener("DOMContentLoaded", () => {
+    // active 탭 요소를 안전하게 조회: 없으면 기본값 "all" 사용
+    const activeTabEl = document.querySelector(".season-tabs .tab.active");
+    let currentSeason = activeTabEl ? activeTabEl.getAttribute("data-season") : "all";
+    let currentPlayer = ""; // index.html에서는 랭킹 데이터 조회에 플레이어 선택 없이 처리
 
-    const rankingTable = document.getElementById("rankingBody");
-    rankingTable.innerHTML = "";
-
-    data.ranking.forEach(player => {
-      const row = document.createElement("tr");
-      row.innerHTML = `
-        <td>${player.name}</td>
-        <td>${player.games}</td>
-        <td>${player.point_sum.toFixed(2)}</td>
-        <td>${player.point_avg.toFixed(2)}</td>
-      `;
-      rankingTable.appendChild(row);
-    });
-
-    // 날짜별 테이블 생성
-    const headerRow = document.getElementById("dateScoreHeader").firstElementChild;
-    data.players.forEach(name => {
-      const th = document.createElement("th");
-      th.textContent = name;
-      headerRow.appendChild(th);
-    });
-
-    const body = document.getElementById("dateScoreBody");
-    data.daily.forEach(entry => {
-      const row = document.createElement("tr");
-      const dateCell = document.createElement("td");
-      dateCell.textContent = entry.date.split("-")[0];
-      row.appendChild(dateCell);
-
-      data.players.forEach(name => {
-        const td = document.createElement("td");
-        td.textContent = entry.points[name] !== undefined ? entry.points[name].toFixed(2) : "-";
-        row.appendChild(td);
+    // 탭 클릭 이벤트 리스너 등록 (조건문 제거)
+    const tabs = document.querySelectorAll(".season-tabs .tab");
+    tabs.forEach(tab => {
+      tab.addEventListener("click", function(){
+        tabs.forEach(t => t.classList.remove("active"));
+        this.classList.add("active");
+        currentSeason = this.getAttribute("data-season");
+        loadRanking();  // 무조건 호출
       });
-
-      body.appendChild(row);
     });
-  }
 
-  loadRanking();
+    function showLoading() {
+      const loadingElem = document.getElementById("loading");
+      if (loadingElem) {
+        loadingElem.style.display = "flex";
+      }
+    }
+
+    function hideLoading() {
+      const loadingElem = document.getElementById("loading");
+      if (loadingElem) {
+        loadingElem.style.display = "none";
+      }
+    }
+
+    async function loadRanking() {
+      showLoading();
+      try {
+        const res = await fetch("/ranking?season=" + currentSeason);
+        const data = await res.json();
+
+        // 랭킹 테이블 업데이트
+        const rankingTable = document.getElementById("rankingBody");
+        if (rankingTable) {
+          rankingTable.innerHTML = "";
+          data.ranking.forEach(player => {
+            const row = document.createElement("tr");
+            // 플레이어 이름 클릭 시 stats_page로 이동하도록 처리 (HTML 렌더링 페이지)
+            row.innerHTML = `
+              <td><a href="/stats_page/${player.name}?season=${currentSeason}">${player.name}</a></td>
+              <td>${player.games}</td>
+              <td>${player.point_sum.toFixed(1)}</td>
+              <td>${player.point_avg.toFixed(1)}</td>
+            `;
+            rankingTable.appendChild(row);
+          });
+        } else {
+          console.error("rankingBody 요소를 찾을 수 없습니다.");
+        }
+
+        // 날짜별 점수 기록 업데이트
+        const headerElem = document.getElementById("dateScoreHeader");
+        if (headerElem) {
+          const headerRow = headerElem.querySelector("tr");
+          if (headerRow) {
+            headerRow.innerHTML = "<th style='min-width:80px;'>날짜</th>";
+            data.players.forEach(name => {
+              const th = document.createElement("th");
+              th.textContent = name;
+              th.style.minWidth = "80px";
+              headerRow.appendChild(th);
+            });
+          } else {
+            console.error("dateScoreHeader 내부에 <tr> 요소를 찾을 수 없습니다.");
+          }
+        } else {
+          console.error("dateScoreHeader 요소를 찾을 수 없습니다.");
+        }
+
+        const dateScoreBody = document.getElementById("dateScoreBody");
+        if (dateScoreBody) {
+          dateScoreBody.innerHTML = "";
+          data.daily.forEach(entry => {
+            const row = document.createElement("tr");
+            const dateCell = document.createElement("td");
+            dateCell.textContent = entry.date.split("-")[0];
+            dateCell.style.minWidth = "80px";
+            row.appendChild(dateCell);
+            data.players.forEach(name => {
+              const td = document.createElement("td");
+              td.textContent = entry.points[name] !== undefined ? entry.points[name].toFixed(1) : "-";
+              td.style.minWidth = "80px";
+              row.appendChild(td);
+            });
+            dateScoreBody.appendChild(row);
+          });
+        } else {
+          console.error("dateScoreBody 요소를 찾을 수 없습니다.");
+        }
+      } catch (error) {
+        console.error("Error loading ranking:", error);
+      } finally {
+        hideLoading();
+      }
+    }
+
+    loadRanking();
+
+  });
 </script>
+
+
 {% endblock %}

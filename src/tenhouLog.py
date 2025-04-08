@@ -1,8 +1,5 @@
-#! /usr/bin/env python3
-#coding=utf-8
-
 import re
-from statics.mahjong301 import *
+from .mahjong301 import *
 
 class game(object):
     """docstring for game"""
@@ -34,6 +31,12 @@ class game(object):
             log(logObj = logObj, playerSum = len(self.jsonObj["name"]))
             for logObj in self.jsonObj["log"]
         ]
+
+        for lg in self.logs:
+            if len(lg.logObj[16]) > 2:
+                for element in lg.logObj[16][2]:
+                    if isinstance(element, str) and ("Riichi" in element or "Pinfu" in element):
+                        print(element, self.jsonObj["ref"])
 
         for lg in self.logs:
             for p in range(len(self.players)):

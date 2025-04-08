@@ -1,4 +1,4 @@
-from statics.lang import zh, kanji, ja, katakana, romaji, en, kr
+from src.lang import zh, kanji, ja, katakana, romaji, en, kr
 import math
 
 s=kr

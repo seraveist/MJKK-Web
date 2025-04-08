@@ -1,20 +1,51 @@
 {% extends "base.html" %}
-{% block title %}MJKK 개인 통계{% endblock %}
 {% block content %}
 
-  <div class="stats-container">
-    <h1>MJKK 개인 통계</h1>
+<div id="loading" class="loading-overlay" style="display: none;">
+  <div class="spinner"></div>
+</div>
+
+<div class="stats-container">
+  <h1>📑 마자까까 개인 통계</h1>
+  <div class="season-tabs">
+    {% for s in available_seasons %}
+      <button class="tab {% if s|string == season|string %}active{% endif %}" data-season="{{ s }}">
+        시즌 {{ s }}
+      </button>
+    {% endfor %}
+    <button class="tab {% if season == 'all' %}active{% endif %}" data-season="all">전체</button>
+  </div>
+
+  <div class="separator"></div>
+
   <label for="playerSelect">플레이어 :</label>
   <select id="playerSelect"></select>
 
+  <div class="separator"></div>
+  
+  <h2>최근 순위</h2>
+  <!-- 그래프 컨테이너 -->
+  <div class="graph-container">
+    <canvas id="rankChart"></canvas>
+  </div>
+
+  <div class="graph-controls">
+    <button class="graph-btn" data-count="10">10국</button>
+    <button class="graph-btn" data-count="50">50국</button>
+    <button class="graph-btn" data-count="100">100국</button>
+  </div>
+  <div class="separator"></div>
+  <h2>시즌 통계</h2>
+  <!-- 통계 테이블 -->
   <table id="statsTable">
     <thead>
       <tr><th>항목</th><th>값</th></tr>
     </thead>
     <tbody></tbody>
   </table>
-
-  <h3>역 달성 내역</h3>
+  <div class="separator"></div>
+  <!-- 역 달성 내역 -->
+  <h2>역 달성 내역</h2>
   <table id="yakuTable">
     <thead>
       <tr>
@@ -22,13 +53,14 @@
         <th>달성 횟수</th>
       </tr>
     </thead>
-    <tbody>
-      <!-- JS로 채움 -->
-    </tbody>
+    <tbody></tbody>
   </table>
+</div>
 
-  <script>
-    const display_keys = {
+<!-- Chart.js CDN 로드 -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  const display_keys = {
     "games": { label: "대국 수", format: "int", category: "기본" },
     "total.avg": { label: "평균순위", format: "float", category: "기본" },
     "total_first_count": { label: "1위 횟수", format: "int", category: "기본" },
@@ -149,119 +181,235 @@
         "大四喜" : "대사희",
         "纯正九莲宝灯" : "순정구련보등"
     };
+document.addEventListener("DOMContentLoaded", () => {
+  // 템플릿 변수로 전달된 기본 player_name (없으면 빈 문자열)
+  const defaultPlayer = "{{ player_name | default('', true) }}";
+  let currentPlayer = defaultPlayer;
+  // 기존에 전달된 season (기본 선택된 시즌) 템플릿 변수는 stats.html의 'season'
+  let currentSeason = "{{ season }}";
+  let currentCount = 10; // 기본적으로 10개의 게임 데이터를 사용
 
-    function renderTable(stats) {
-      const tbody = document.querySelector("#statsTable tbody");
-      tbody.innerHTML = "";
+  // 그래프 차트 객체
+  let rankChart = null;
 
-      // ✅ 비율 계산용 처리
-      const totalGames = stats.games || 0;
-      if (totalGames > 0) {
-        stats.first_rate = stats.total_first_count / totalGames;
-        stats.second_rate = stats.total_second_count / totalGames;
-        stats.third_rate = stats.total_third_count / totalGames;
-        stats.fourth_rate = stats.total_fourth_count / totalGames;
-      }
-
-      let currentCategory = "";
-      for (const [key, { label, format, category }] of Object.entries(display_keys)) {
-        const value = key.split('.').reduce((o, i) => (o ? o[i] : undefined), stats);
-        if (value !== undefined) {
-          if (category && category !== currentCategory) {
-            const headerRow = document.createElement("tr");
-            const headerCell = document.createElement("td");
-            headerCell.colSpan = 2;
-            headerCell.className = "category-header";
-            headerCell.textContent = category;
-            headerRow.appendChild(headerCell);
-            tbody.appendChild(headerRow);
-            currentCategory = category;
+  // 함수: 그래프 그리기 또는 업데이트 (Chart.js 사용)
+  function drawChart(rankData) {
+  const ctx = document.getElementById('rankChart').getContext('2d');
+  // x축은 단순 인덱스로 처리
+  const labels = rankData.map((_, index) => index + 1);
+  if (rankChart) {
+    rankChart.data.labels = labels;
+    rankChart.data.datasets[0].data = rankData;
+    rankChart.update();
+  } else {
+    rankChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels, // x축 레이블은 보이지 않음
+        datasets: [{
+          data: rankData,
+          borderColor: '#3498db',
+          backgroundColor: 'rgba(52, 152, 219, 0.2)',
+          fill: false,
+          tension: 0, // 직선 연결
+          pointStyle: 'circle',
+          pointRadius: 4,
+          pointBackgroundColor: '#3498db'
+        }]
+      },
+      options: {
+        // 반응형으로 캔버스가 부모 컨테이너의 사이즈를 따른다.
+        responsive: true,
+        maintainAspectRatio: false,  
+        scales: {
+          x: {
+            display: false // x축 라벨은 숨김
+          },
+          y: {
+            // y축을 역순으로 해서 1이 상단에 오도록 설정
+            reverse: true,
+            ticks: {
+              stepSize: 1,
+              // 추가 여백을 주기 위해 약간의 패딩을 포함(원하는 경우)
+              // callback: (value) => value  // 기본 그대로
+            },
+            // y축 범위에 여유를 주어 선이 테두리와 붙지 않도록 설정
+            suggestedMin: 1,
+            suggestedMax: 4
           }
-
-          const row = document.createElement("tr");
-          let formatted = "";
-          if (typeof value === "number") {
-            switch (format) {
-              case "int": formatted = Math.floor(value).toLocaleString(); break;
-              case "float": formatted = value.toFixed(2); break;
-              case "percent": formatted = (value * 100).toFixed(2) + "%"; break;
-              default: formatted = value;
-            }
-          } else {
-            formatted = value;
+        },
+        plugins: {
+          legend: {
+            display: false
           }
-          row.innerHTML = `<td>${label}</td><td>${formatted}</td>`;
-          tbody.appendChild(row);
+        },
+        layout: {
+          // 캔버스 내부의 레이아웃 패딩을 미세 조정
+          padding: {
+            top: 0,
+            bottom: 0,
+            left: 0,
+            right: 0
+          }
         }
       }
-    }
-
-
-    function renderYakus(yakusArray) {
-      const yakuTableBody = document.querySelector("#yakuTable tbody");
-      yakuTableBody.innerHTML = "";
-
-      if (!yakusArray || !Array.isArray(yakusArray)) {
-        yakuTableBody.innerHTML = "<tr><td colspan='2'>데이터 없음</td></tr>";
-        return;
-      }
-
-      // 기존 yakus 데이터를 객체로 변환 (이름 기준으로 빠르게 접근하기 위해)
-      const yakusMap = Object.fromEntries(yakusArray.map(([count, name]) => [name.trim(), count]));
-
-      // yaku_name_map 순서대로, 없으면 count = 0
-      const sortedYakus = Object.keys(yaku_name_map).map(name => {
-        return [yakusMap[name] || 0, name];
-      });
-
-      // 테이블 렌더링
-      sortedYakus.forEach(([count, yaku]) => {
-        const row = document.createElement("tr");
-        const nameCell = document.createElement("td");
-        const countCell = document.createElement("td");
-        nameCell.textContent = yaku_name_map[yaku] || yaku;
-        countCell.textContent = count.toLocaleString();
-        row.appendChild(nameCell);
-        row.appendChild(countCell);
-        yakuTableBody.appendChild(row);
-      });
-    }
-
-
-    document.addEventListener("DOMContentLoaded", () => {
-      const select = document.getElementById("playerSelect");
-      fetch("/stats/all")
-        .then((res) => res.json())
-        .then((data) => {
-          data.allPlayers.forEach((player) => {
-            const option = document.createElement("option");
-            option.value = player;
-            option.textContent = player;
-            select.appendChild(option);
-          });
-          if (data.allPlayers.length > 0) {
-            select.value = data.allPlayers[0];
-            loadStats(data.allPlayers[0]);
-          }
-        });
-      select.addEventListener("change", () => {
-        loadStats(select.value);
-      });
     });
 
-  function loadStats(player) {
-    fetch(`/stats/${player}`)
-      .then((res) => res.json())
-      .then((data) => {
-        const stats = data.stats || data.data;
-        if (!stats) return;
+  }
+}
 
-        renderTable(stats);
-        renderYakus(stats.yakus);
-      });
+  // 그래프 컨트롤 버튼 이벤트
+  const graphBtns = document.querySelectorAll(".graph-btn");
+  graphBtns.forEach(btn => {
+    btn.addEventListener("click", function(){
+      currentCount = parseInt(this.getAttribute("data-count"));
+      loadStats(currentPlayer);
+    });
+  });
+
+  // 시즌 탭 이벤트
+  const tabs = document.querySelectorAll(".season-tabs .tab");
+  tabs.forEach(tab => {
+    tab.addEventListener("click", function(){
+      tabs.forEach(t => t.classList.remove("active"));
+      this.classList.add("active");
+      currentSeason = this.getAttribute("data-season");
+      loadStats(currentPlayer);
+    });
+  });
+
+  function showLoading() {
+    const loadingElem = document.getElementById("loading");
+    if (loadingElem) {
+      loadingElem.style.display = "flex";
+    }
+  }
+  function hideLoading() {
+    const loadingElem = document.getElementById("loading");
+    if (loadingElem) {
+      loadingElem.style.display = "none";
+    }
   }
 
-  </script>
-  </div>
-  
+  // 통계 데이터 렌더링 함수 (테이블과 yakus)
+  function renderTable(stats) {
+    const tbody = document.querySelector("#statsTable tbody");
+    tbody.innerHTML = "";
+    const totalGames = stats.games || 0;
+    if (totalGames > 0) {
+      stats.first_rate = stats.total_first_count / totalGames;
+      stats.second_rate = stats.total_second_count / totalGames;
+      stats.third_rate = stats.total_third_count / totalGames;
+      stats.fourth_rate = stats.total_fourth_count / totalGames;
+    }
+    let currentCategory = "";
+    for (const [key, { label, format, category }] of Object.entries(display_keys)) {
+      const value = key.split('.').reduce((o, i) => (o ? o[i] : undefined), stats);
+      if (value !== undefined) {
+        if (category && category !== currentCategory) {
+          const headerRow = document.createElement("tr");
+          const headerCell = document.createElement("td");
+          headerCell.colSpan = 2;
+          headerCell.className = "category-header";
+          headerCell.textContent = category;
+          headerRow.appendChild(headerCell);
+          tbody.appendChild(headerRow);
+          currentCategory = category;
+        }
+        const row = document.createElement("tr");
+        let formattedValue = "";
+        if (typeof value === "number") {
+          switch (format) {
+            case "int": formattedValue = Math.floor(value).toLocaleString(); break;
+            case "float": formattedValue = value.toFixed(2); break;
+            case "percent": formattedValue = (value * 100).toFixed(2) + "%"; break;
+            default: formattedValue = value;
+          }
+        } else {
+          formattedValue = value;
+        }
+        row.innerHTML = `<td>${label}</td><td>${formattedValue}</td>`;
+        tbody.appendChild(row);
+      }
+    }
+  }
+
+  function renderYakus(yakusArray) {
+    const yakuTableBody = document.querySelector("#yakuTable tbody");
+    yakuTableBody.innerHTML = "";
+    if (!yakusArray || !Array.isArray(yakusArray)) {
+      yakuTableBody.innerHTML = "<tr><td colspan='2'>데이터 없음</td></tr>";
+      return;
+    }
+    const yakusMap = Object.fromEntries(yakusArray.map(([count, name]) => [name.trim(), count]));
+    const sortedYakus = Object.keys(yaku_name_map).map(name => [yakusMap[name] || 0, name]);
+    sortedYakus.forEach(([count, yaku]) => {
+      const row = document.createElement("tr");
+      const nameCell = document.createElement("td");
+      const countCell = document.createElement("td");
+      nameCell.textContent = yaku_name_map[yaku] || yaku;
+      countCell.textContent = count.toLocaleString();
+      row.appendChild(nameCell);
+      row.appendChild(countCell);
+      yakuTableBody.appendChild(row);
+    });
+  }
+
+  // loadStats: 플레이어별 통계 데이터를 JSON API에서 불러와 그래프와 테이블 갱신
+  function loadStats(player) {
+    showLoading();
+    currentPlayer = player;
+    // API 엔드포인트 호출 시 "count" 파라미터 포함
+    fetch(`/stats_api/${player}?season=${currentSeason}&count=${currentCount}`)
+      .then((res) => res.json())
+      .then((data) => {
+        console.log("rankData:", data.rankData);  // rankData 출력 확인
+        const stats = data.stats || data.data;
+        if (!stats) return;
+        renderTable(stats);
+        renderYakus(stats.yakus);
+        if (stats.rankData && stats.rankData.length > 0) {
+          drawChart(stats.rankData);
+        } else {
+          console.warn("rankData is empty or undefined.");
+        }
+      })
+      .catch(error => console.error("Error loading stats:", error))
+      .finally(() => hideLoading());     
+  }
+
+  // 플레이어 콤보박스 처리
+  const playerSelect = document.getElementById("playerSelect");
+  if (playerSelect) {
+    playerSelect.innerHTML = "";
+    fetch("/stats/all")
+      .then((res) => res.json())
+      .then((data) => {
+        data.allPlayers.forEach((player) => {
+          const option = document.createElement("option");
+          option.value = player;
+          option.textContent = player;
+          playerSelect.appendChild(option);
+        });
+        if (data.allPlayers.length > 0) {
+          if (defaultPlayer && data.allPlayers.includes(defaultPlayer)) {
+            playerSelect.value = defaultPlayer;
+            currentPlayer = defaultPlayer;
+          } else {
+            playerSelect.value = data.allPlayers[0];
+            currentPlayer = data.allPlayers[0];
+          }
+          loadStats(currentPlayer);
+        }
+      });
+    playerSelect.addEventListener("change", () => {
+      currentPlayer = playerSelect.value;
+      loadStats(currentPlayer);
+    });
+  } else {
+    console.error("playerSelect 요소를 찾을 수 없습니다.");
+  }
+});
+</script>
+
 {% endblock %}

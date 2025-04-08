@@ -1,7 +1,4 @@
-from statics.tenhouLog import *
-import json
-import math
-import datetime
+import json, math, datetime
 
 class Statistic(object):
     """docstring for Statistic"""
@@ -92,7 +89,7 @@ class PlayerStatistic(object):
     def __init__(self, games, playerName):
         super(PlayerStatistic, self).__init__()
         self.games = games
-        self.playerName = playerName.get('name')
+        self.playerName = playerName['name']
 
         self.rank                    = Statistic()          #평균순위,1234위율
         self.east_rank               = Statistic()          #동가_시작_평균순위,1234위율
@@ -148,7 +145,7 @@ class PlayerStatistic(object):
         self.yakus = dict()
 
         for game in self.games:
-            playerIndex = game.getPlayerIndex_ByName(playerName.get('list'))
+            playerIndex = game.getPlayerIndex_ByName(playerName.get('aliases'))
             if playerIndex == -1:
                 continue
 
