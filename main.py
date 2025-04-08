@@ -12,7 +12,7 @@ app = Flask(__name__, template_folder="templates", static_folder="static")
 
 app.config['DB_USER'] = os.getenv('DB_USER')
 app.config['DB_PASSWORD'] = os.getenv('DB_PASSWORD')
-app.config["DB_URL"] = os.getenv('DB_URL')
+app.config["DB_URL"] = f"mongodb+srv://{os.environ.get('DB_USER', 'defaultUser')}:{os.environ.get('DB_PASSWORD', 'defaultPassword')}@cluster0.6nqoq8u.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
