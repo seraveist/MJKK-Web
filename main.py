@@ -9,7 +9,10 @@ from src import tenhouStatistics, tenhouLog
 
 # 환경 변수 및 설정 로드 (config.py 활용)
 app = Flask(__name__, template_folder="templates", static_folder="static")
-app.config.from_object(Config)
+
+app.config['DB_USER'] = os.getenv('DB_USER')
+app.config['DB_PASSWORD'] = os.getenv('DB_PASSWORD')
+app.config["DB_URL"] = os.getenv('DB_URL')
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
