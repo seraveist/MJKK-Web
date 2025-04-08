@@ -4,7 +4,6 @@ import json
 import datetime
 from flask import Flask, jsonify, render_template, request
 from pymongo import MongoClient
-from config import Config
 from src import tenhouStatistics, tenhouLog
 
 # 환경 변수 및 설정 로드 (config.py 활용)
