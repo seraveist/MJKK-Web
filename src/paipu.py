@@ -24,13 +24,12 @@ msUsername = "seravee2114@gmail.com"
 msPassword = "fkd6779"
 
 async def get_game_log(log_uuid):
-    print(log_uuid)
+    print("input log : " + log_uuid)
     lobby, channel, version_to_force = await connect()
     await login(lobby, msUsername, msPassword, version_to_force)
     game_log = await load_and_process_game_log(lobby, log_uuid, version_to_force)
     await channel.close()
     if game_log:
-        print(game_log)
         if game_log.get('log') == None:
             return None
         else:

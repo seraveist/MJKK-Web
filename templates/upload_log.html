@@ -78,11 +78,5 @@
   {% endif %}
 </div>
 
-<script>
-  // 폼 제출 시, 기존 메시지를 초기화하고 작은 spinner를 표시
-  document.getElementById("uploadForm").addEventListener("submit", function(){
-    document.getElementById("message").textContent = "";
-    document.getElementById("smallSpinner").style.display = "block";
-  });
-</script>
+<script src="{{ url_for('static', filename='js/uploadLog.js') }}"></script>
 {% endblock %}

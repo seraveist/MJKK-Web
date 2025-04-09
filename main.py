@@ -223,14 +223,6 @@ def stats_page_player(player_name: str):
 
 @app.route("/ranking", methods=["GET"])
 def get_ranking():
-
-    pipeline = [
-        {"$unwind": "$name"},
-        {"$group": {"_id": "$name"}},
-        {"$sort": {"_id": 1}}
-    ]
-    results = list(collection.aggregate(pipeline))
-    print(results)
     try:
         season_param = request.args.get("season", "all")
         # 시즌이 "all"이면 그냥 전체 문서를 가져옵니다.
@@ -296,9 +288,6 @@ def get_ranking():
             ranking_list.sort(key=lambda x: (-x["games"], -x["point_avg"]))
             daily_list = [{"date": k.split("-")[0] if "-" in k else k, "points": v} 
                           for k, v in sorted(daily_scores.items(), reverse=True)]
-            
-            total_points_all_users = sum(stats["point_sum"] for stats in player_scores.values())
-            logger.info("Total POINT for all users: %s", total_points_all_users)
 
             return jsonify({
                 "ranking": ranking_list,
