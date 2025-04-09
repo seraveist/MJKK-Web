@@ -364,7 +364,6 @@ document.addEventListener("DOMContentLoaded", () => {
     fetch(`/stats_api/${player}?season=${currentSeason}&count=${currentCount}`)
       .then((res) => res.json())
       .then((data) => {
-        console.log("rankData:", data.rankData);  // rankData 출력 확인
         const stats = data.stats || data.data;
         if (!stats) return;
         renderTable(stats);

@@ -23,15 +23,16 @@
       margin: 20px 0;
     }
 
-    /* 상단 네비게이션 */
     nav {
       background-color: #222;
       padding: 12px 0;
       border-radius: 8px;
       margin-bottom: 24px;
       box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-      text-align: left; /* 가운데 정렬 */
+      text-align: left;
     }
+
+    /* 기존 PC 스타일 */
     nav a {
       color: #fff;
       text-decoration: none;
@@ -40,6 +41,7 @@
       font-size: 16px;
       transition: color 0.3s ease;
     }
+
     nav a:hover {
       color: #ffcc00;
     }
@@ -245,6 +247,65 @@
       background-color: #eaeaea;
     }
 
+    #totalStatsTable {
+      width: 100%;
+      border-collapse: collapse; /* collapse 유지 */
+      table-layout: auto;
+    }
+
+    /* 테이블 모든 셀에 기본 border */
+    #totalStatsTable th,
+    #totalStatsTable td {
+      border: 1px solid #ccc;
+      /* (3) 텍스트 줄바꿈 방지 */
+      white-space: nowrap;  
+      overflow: hidden;     /* 필요 시 오버플로 숨김 처리 */
+      text-align: center;
+    }
+
+    /* 행 배경색 번갈아 */
+    #totalStatsTable tbody tr:nth-child(even) {
+      background-color: #f9f9f9; /* 짝수행 회색, 홀수행 흰색 */
+    }
+
+    /* 헤더 셀(열 헤더) */
+    #totalStatsTable thead th {
+      position: sticky;
+      top: 0;
+      background-color: #b3b3b3;
+      z-index: 11;
+      padding: 10px 8px;
+      font-size: clamp(10px, 1vw, 12px);
+      /* (3) 줄바꿈 방지 */
+      white-space: nowrap;
+    }
+
+    /* 행 헤더(<tbody>의 첫 번째 열) */
+    #totalStatsTable tbody th {
+      position: sticky;
+      left: 0;
+      background-color: #fff;
+      z-index: 5;
+      padding: 10px 8px;
+      font-size: 12px;
+      text-align: center;
+      font-weight: bold;
+      /* border-collapse: collapse 환경에서 선이 뭉개지는 문제 완화:
+        box-shadow 또는 border를 명시적으로 지정 */
+      box-shadow: inset 2px 0 0 0 #ccc;
+
+      /* (3) 줄바꿈 방지 */
+      white-space: nowrap;
+    }
+
+    /* (2) 마지막 열에 볼드 해주는 기존 규칙을 오버라이드하여 제거 */
+    #totalStatsTable td:last-child,
+    #totalStatsTable {
+      font-weight: normal;
+      text-align: center; /* 원하면 정렬은 유지하되, 볼드만 제거 */
+      color: #000;
+    }
+
     /* 반응형 (PC 해상도 이상) */
     @media (min-width: 1200px) {
       body {
@@ -291,6 +352,20 @@
         padding: 4px 4px; /* 버튼 사이즈 축소 */
         font-size: 14px; /* 글자 크기 축소 */
       }
+      nav {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        text-align: center;
+      }
+      nav a {
+        margin: 5px;              /* 버튼 간 간격을 줄이고, 아래쪽 여백 추가 */
+        font-size: 14px;          /* 모바일용 폰트 크기 약간 조정 가능 */
+        white-space: normal;      /* 텍스트 줄바꿈 허용 */
+        word-break: keep-all;     /* 단어 중간에서 줄바꿈 방지 */
+        flex: 1 1 auto;           /* 가능하면 각 버튼이 동등한 너비를 차지 */
+        max-width: 40%;           /* 한 줄에 2개 정도 배치(필요에 따라 조정) */
+      }
     }
   </style>
 </head>
@@ -298,6 +373,8 @@
   <nav>
     <a href="/">대시보드</a>
     <a href="/stats">개인 통계</a>
+    <a href="/totalstats">전체 통계</a>
+    <a href="/upload_log">패보 등록</a>
   </nav>
   {% block content %}{% endblock %}
 </body>

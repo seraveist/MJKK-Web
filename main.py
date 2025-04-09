@@ -4,7 +4,10 @@ import json
 import datetime
 from flask import Flask, jsonify, render_template, request
 from pymongo import MongoClient
-from src import tenhouStatistics, tenhouLog
+from src import tenhouStatistics, tenhouLog, paipu
+
+#from dotenv import load_dotenv
+#load_dotenv()  # .env 파일의 설정을 로드
 
 # 환경 변수 및 설정 로드 (config.py 활용)
 app = Flask(__name__, template_folder="templates", static_folder="static")
@@ -307,6 +310,66 @@ def get_ranking():
     except Exception as e:
         logger.error("Error generating ranking", exc_info=e)
         return jsonify({"error": "Failed to generate ranking"}), 500
+
+@app.route("/totalstats", methods=["GET"])
+def totalstats_page():
+    # 시스템에서 현재 시즌 계산
+    system_season = get_current_season()
+    # 전체 가능한 시즌 목록 (예: 1부터 시스템 시즌까지)
+    available_seasons = list(range(1, system_season + 1))
+    available_seasons.reverse()
+    # totalstats.html 템플릿을 렌더링 (여기서 다른 페이지와 달리, 플레이어 콤보박스 대신
+    # 전체 유저 통계 데이터를 한 번에 집계하는 형태로 구성합니다)
+    return render_template("totalstats.html", season=system_season, available_seasons=available_seasons)
+
+
+import asyncio  # 추가: 비동기 함수 호출용
+
+# ... (기존 import 및 설정 코드) ...
+
+@app.route("/upload_log", methods=["GET", "POST"])
+def upload_log():
+    message = ""
+    game_log = None
+    if request.method == "POST":
+        url_link = request.form.get("url")
+        if not url_link:
+            message = "URL을 입력해주세요."
+            return render_template("upload_log.html", message=message)
+        else:
+            if "google.com" in url_link:
+                url_link = url_link.split("paipu%3D")[1].split("_")[0]
+            if "paipu" in url_link:
+                url_link = url_link.split("=")[1].split("_")[0]
+            if "_" in url_link:
+                url_link = url_link.split("_")[0]
+            if len(url_link) != 43:
+                message = "패보 양식을 확인해주세요."
+                return render_template("upload_log.html", message=message)
+        
+        try:
+            res = asyncio.run(paipu.get_game_log(url_link))
+            game_log = res
+        except Exception as e:
+            return render_template("upload_log.html", message="패보 저장 실패: API 호출 오류류.")
+
+        if game_log is None:
+            message = "패보 저장 실패: 로그 데이터가 없습니다."
+            return render_template("upload_log.html", message=message)
+        
+        # MongoDB collection에서 같은 "ref" 값이 있는지 검사
+        ref_value = game_log.get("ref")
+        if ref_value is None:
+            message = "패보 저장 실패: 'ref' 값이 없습니다."
+            return render_template("upload_log.html", message=message)
+        
+        existing = collection.find_one({"ref": ref_value})
+        if existing:
+            message = "이미 저장된 패보입니다."
+        else:
+            collection.insert_one(game_log)
+            message = "패보 저장 성공!"
+    return render_template("upload_log.html", message=message, game_log=game_log)
 
 
 if __name__ == "__main__":
