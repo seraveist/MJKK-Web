@@ -309,7 +309,7 @@ def totalstats_page():
     available_seasons.reverse()
     # totalstats.html 템플릿을 렌더링 (여기서 다른 페이지와 달리, 플레이어 콤보박스 대신
     # 전체 유저 통계 데이터를 한 번에 집계하는 형태로 구성합니다)
-    return render_template("totalstats.html", season=system_season, available_seasons=available_seasons)
+    return render_template("totalStats.html", season=system_season, available_seasons=available_seasons)
 
 
 import asyncio  # 추가: 비동기 함수 호출용
