@@ -143,7 +143,6 @@ class PlayerStatistic(object):
         self.richi_first             = Statistic()          #리치_선제율
 
         self.yakus = dict()
-        kazoe = 0
         
         for game in self.games:
             playerIndex = game.getPlayerIndex_ByName(playerName.get('aliases'))
@@ -210,7 +209,7 @@ class PlayerStatistic(object):
                             for yaku in log.yakuNames[i]:
                                 self.yakus[yaku] = self.yakus.get(yaku, 0) + 1
                             if log.isKazoe() == True:
-                                kazoe += 1
+                                self.yakus['数え役満'] = self.yakus.get('数え役満', 0) + 1
 
                 self.fulu.add(isFulu)
                 if isFulu:
@@ -246,8 +245,6 @@ class PlayerStatistic(object):
                     self.dora_inner.add(isWin and log.dora_inner[index])
                     if isWin and log.dora_inner[index]:
                         self.dora_inner_eff.add(log.doraInnerScore(playerIndex, log.dora_inner[index]))
-        if kazoe > 0:
-            self.yakus['数え役満'] = kazoe
             
     def dict(self):
         return dict(
