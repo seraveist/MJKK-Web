@@ -9,7 +9,6 @@ from src import tenhouStatistics, tenhouLog, paipu
 #from dotenv import load_dotenv
 #load_dotenv()  # .env 파일의 설정을 로드
 
-# 환경 변수 및 설정 로드 (config.py 활용)
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
 app.config['DB_USER'] = os.getenv('DB_USER')
