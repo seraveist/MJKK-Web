@@ -248,7 +248,6 @@ class PlayerStatistic(object):
                         self.dora_inner_eff.add(log.doraInnerScore(playerIndex, log.dora_inner[index]))
         if kazoe > 0:
             self.yakus['数え役満'] = kazoe
-            print(self.yakus)
             
     def dict(self):
         return dict(
