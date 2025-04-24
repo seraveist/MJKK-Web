@@ -331,7 +331,12 @@ class log(object):
         lastScore = CalcScore(fan - dora_inner, fu, isHost, isTsumo)
         return oriScore-lastScore
         
-    
+    def isKazoe(self):
+        score = self.logObj[16][2][3]
+        if '数え役満' in score:
+            return True
+        return False
+            
     @property
     def doraPtr(self):
         return self._doraPtr
