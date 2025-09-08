@@ -9,6 +9,7 @@ from datetime import datetime
 import websockets
 import aiohttp
 import json
+import re
 
 from src.ms.base import MSRPCChannel
 from src.ms.rpc import Lobby
@@ -46,7 +47,7 @@ async def connect():
             config = await res.json()
             gateways = [g["url"] for g in config["ip"][0]["gateways"]]
             url = random.choice(gateways)
-            server = re.sub(r'^(?:https?|wss?)://', '', raw_url).rstrip('/')
+            server = re.sub(r'^(?:https?|wss?)://', '', url).rstrip('/')
             endpoint = "wss://{}/gateway".format(server)
 
     channel = MSRPCChannel(endpoint)
