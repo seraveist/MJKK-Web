@@ -35,7 +35,7 @@ USERS = [
     {'name': 'jongja', 'aliases': ['jongja']},
     {'name': 'ARKANA', 'aliases': ['ARKANA', 'BingHayu']},
     {'name': 'N@Gi', 'aliases': ['N@Gi', 'cloudsin']},
-    {'name': 'セラビー', 'aliases': ['セラビー', 'ラビビビ']},
+    {'name': 'セラビー', 'aliases': ['セラビー', 'ラビビビ', 'MeikyouShisui']},
     {'name': 'SinYoA', 'aliases': ['SinYoA', 'RyuYoA']},
     {'name': '한벼리', 'aliases': ['한벼리']},
     {'name': '맬렁호랭이', 'aliases': ['맬렁호랭이']},
