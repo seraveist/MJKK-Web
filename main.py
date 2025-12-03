@@ -39,9 +39,11 @@ USERS = [
     {'name': 'SinYoA', 'aliases': ['SinYoA', 'RyuYoA']},
     {'name': '한벼리', 'aliases': ['한벼리']},
     {'name': '맬렁호랭이', 'aliases': ['맬렁호랭이']},
-    {'name': '적극적인소극성', 'aliases': ['적극적인소극성']},
     {'name': '黑荏子', 'aliases': ['黑荏子']},
     {'name': '숭악', 'aliases': ['숭악']},
+    {'name': '적극적인소극성', 'aliases': ['적극적인소극성']},
+    {'name': '최하노', 'aliases': ['최하노']},
+    {'name': '쵸로기', 'aliases': ['쵸로기']},
     {'name': '무흐루', 'aliases': ['무흐루']},
     {'name': '태어닝', 'aliases': ['태어닝']},
     {'name': 'nyabru', 'aliases': ['nyabru']}
