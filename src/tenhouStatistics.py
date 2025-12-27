@@ -252,6 +252,7 @@ class PlayerStatistic(object):
             name                   = self.playerName,
             games                  = self.rank.len(),
             kuksu                  = self.kuksu,
+            kuksuji                = (self.endScore.avg() - 25000) / self.kuksu * self.rank.len(),
             total                  = dict(avg = self.rank.avg()),
             east                   = dict(avg = self.east_rank.avg()),
             south                  = dict(avg = self.south_rank.avg()),
