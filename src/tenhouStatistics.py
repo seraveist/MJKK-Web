@@ -90,7 +90,7 @@ class PlayerStatistic(object):
         super(PlayerStatistic, self).__init__()
         self.games = games
         self.playerName = playerName['name']
-
+        self.kuksu                   = 0
         self.rank                    = Statistic()          #평균순위,1234위율
         self.east_rank               = Statistic()          #동가_시작_평균순위,1234위율
         self.south_rank              = Statistic()          #남가_시작_평균순위,1234위율
@@ -185,6 +185,7 @@ class PlayerStatistic(object):
                 endRound      = log.endRound(playerIndex)
                 score         = log.endScore[playerIndex]
                 scoreChange   = sum([sc[playerIndex] for sc in log.changeScore])
+                self.kuksu    += len(log.changeScore)
                 index = 0
                 for sc in log.changeScore:
                     if sc[playerIndex] > 0:
@@ -250,6 +251,7 @@ class PlayerStatistic(object):
         return dict(
             name                   = self.playerName,
             games                  = self.rank.len(),
+            kuksu                  = self.kuksu,
             total                  = dict(avg = self.rank.avg()),
             east                   = dict(avg = self.east_rank.avg()),
             south                  = dict(avg = self.south_rank.avg()),
