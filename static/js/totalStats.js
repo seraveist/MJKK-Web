@@ -1,6 +1,7 @@
 const display_keys = {
     "games": { label: "대국 수", format: "int", category: "기본" },
     "kuksu": { label: "총합 국 수", format: "int", category: "기본" },
+    "kuksuji" : { label: "국 수지", format: "int", category: "기본" },
     "total.avg": { label: "평균순위", format: "float", category: "기본" },
     "total_first_count": { label: "1위 횟수", format: "int", category: "기본" },
     "total_second_count": { label: "2위 횟수", format: "int", category: "기본" },
