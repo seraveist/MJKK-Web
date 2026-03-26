@@ -1,0 +1,13 @@
+# migrate_db.py
+from pymongo import MongoClient
+from datetime import datetime
+
+# 수정 필요: 본인 DB 주소
+DB_URL = "mongodb+srv://logUpdater:kCij9L7lZRAeDPiV@cluster0.6nqoq8u.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
+client = MongoClient(DB_URL)
+collection = client["backupDB"]["gameLog"]
+
+collection.create_index([("ref", 1)], unique=True)
+collection.create_index([("log_date", -1)])
+collection.create_index([("name", 1)])
+print("Indexes created.")

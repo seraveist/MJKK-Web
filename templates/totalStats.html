@@ -5,9 +5,8 @@
 </div>
 
 <div class="stats-container">
-  <h1>📑 전체 유저 통계</h1>
+  <h1>전체 유저 통계</h1>
 
-  <!-- 시즌 탭 -->
   <div class="season-tabs">
     {% for s in available_seasons %}
       <button class="tab {% if s|string == season|string %}active{% endif %}" data-season="{{ s }}">
@@ -19,26 +18,26 @@
 
   <div class="separator"></div>
 
-  <!-- 스크롤 가능한 테이블 영역 -->
-  <div class="table-scroll-wrapper" style="max-height:600px;">
+  <p style="font-size:12px;color:#888;text-align:right;margin-bottom:8px;">
+    <span class="val-best">최고</span> /
+    <span class="val-worst">최저</span>
+  </p>
+
+  <div class="table-scroll-wrapper" style="max-height:70vh;">
     <table id="totalStatsTable">
       <thead>
         <tr id="colHeader">
-          <!-- 첫 번째 셀: 행 헤더용 (항목) -->
-          <th style="position: sticky; left: 0; background-color: #fff; z-index: 11;">항목</th>
+          <th>항목</th>
         </tr>
       </thead>
-      <tbody id="totalStatsBody">
-      </tbody>
+      <tbody id="totalStatsBody"></tbody>
     </table>
   </div>
 </div>
 
 <script>
-  window.config = {
-    season: "{{ season }}"
-  };
+  window.config = { season: "{{ season }}" };
 </script>
-<!-- totalStats.js 로드 -->
+<script src="{{ url_for('static', filename='js/statsConfig.js') }}"></script>
 <script src="{{ url_for('static', filename='js/totalStats.js') }}"></script>
 {% endblock %}

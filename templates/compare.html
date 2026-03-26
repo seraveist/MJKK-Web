@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block content %}
+<div id="loading" class="loading-overlay" style="display: none;">
+  <div class="spinner"></div>
+</div>
+
+<div class="stats-container">
+  <h1>플레이어 비교</h1>
+
+  <div class="season-tabs">
+    {% for s in available_seasons %}
+      <button class="tab {% if s|string == season|string %}active{% endif %}" data-season="{{ s }}">시즌 {{ s }}</button>
+    {% endfor %}
+    <button class="tab {% if season == 'all' %}active{% endif %}" data-season="all">전체</button>
+  </div>
+
+  <div class="separator"></div>
+
+  <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:end;">
+    <div class="form-group" style="flex:1;min-width:140px;margin-bottom:0;">
+      <label for="player1">플레이어 1</label>
+      <select id="player1" class="form-input"></select>
+    </div>
+    <div style="font-size:18px;font-weight:600;color:#aaa;padding-bottom:8px;">VS</div>
+    <div class="form-group" style="flex:1;min-width:140px;margin-bottom:0;">
+      <label for="player2">플레이어 2</label>
+      <select id="player2" class="form-input"></select>
+    </div>
+    <button class="btn-primary" onclick="loadComparison()" style="margin-bottom:0;height:42px;">비교</button>
+  </div>
+
+  <div class="separator"></div>
+
+  <div id="compareResult" class="empty-state">플레이어 두 명을 선택하고 비교 버튼을 눌러주세요.</div>
+
+  <!-- 비교 테이블 -->
+  <div id="compareTableWrap" style="display:none;">
+    <div class="category-tabs" id="compareCatTabs"></div>
+    <table id="compareTable">
+      <thead>
+        <tr>
+          <th>항목</th>
+          <th id="p1Header">-</th>
+          <th id="p2Header">-</th>
+        </tr>
+      </thead>
+      <tbody id="compareBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  window.config = { season: "{{ season }}" };
+</script>
+<script src="{{ url_for('static', filename='js/statsConfig.js') }}"></script>
+<script src="{{ url_for('static', filename='js/compare.js') }}"></script>
+{% endblock %}

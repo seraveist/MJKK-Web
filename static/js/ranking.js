@@ -1,113 +1,233 @@
+/**
+ * ranking.js — 대시보드 (랭킹 + 날짜별 점수)
+ * - 에러/빈 상태 처리
+ * - URL 상태 관리 (뒤로가기 지원)
+ */
 document.addEventListener("DOMContentLoaded", () => {
-    // active 탭 요소 안전하게 조회; 없으면 "all"
-    const activeTabEl = document.querySelector(".season-tabs .tab.active");
-    let currentSeason = activeTabEl ? activeTabEl.getAttribute("data-season") : "all";
-    // index.html에서는 플레이어 선택 없이 랭킹 데이터 조회
-    
-    // 탭 클릭 이벤트 리스너 등록: 시즌 변경 시 loadRanking() 호출
-    const tabs = document.querySelectorAll(".season-tabs .tab");
-    tabs.forEach(tab => {
-      tab.addEventListener("click", function(){
-        tabs.forEach(t => t.classList.remove("active"));
-        this.classList.add("active");
-        currentSeason = this.getAttribute("data-season");
-        loadRanking();  // 무조건 호출
-      });
+  let currentSeason = window.config ? window.config.season : "all";
+
+  // URL에서 시즌 복원
+  const urlSeason = new URLSearchParams(location.search).get("season");
+  if (urlSeason) {
+    currentSeason = urlSeason;
+    syncTabUI(currentSeason);
+  }
+
+  // ── 시즌 탭 ──
+  document.querySelectorAll(".season-tabs .tab").forEach(tab => {
+    tab.addEventListener("click", function () {
+      document.querySelectorAll(".season-tabs .tab").forEach(t => t.classList.remove("active"));
+      this.classList.add("active");
+      currentSeason = this.dataset.season;
+      pushState({ season: currentSeason });
+      loadRanking();
     });
+  });
 
-    function showLoading() {
-      const loadingElem = document.getElementById("loading");
-      if (loadingElem) {
-        loadingElem.style.display = "flex";
-      }
+  // 뒤로가기/앞으로가기
+  window.addEventListener("popstate", (e) => {
+    if (e.state && e.state.season) {
+      currentSeason = e.state.season;
+      syncTabUI(currentSeason);
+      loadRanking();
     }
-    function hideLoading() {
-      const loadingElem = document.getElementById("loading");
-      if (loadingElem) {
-        loadingElem.style.display = "none";
+  });
+
+  function syncTabUI(season) {
+    document.querySelectorAll(".season-tabs .tab").forEach(t => {
+      t.classList.toggle("active", t.dataset.season === String(season));
+    });
+  }
+
+  function pushState(state) {
+    const params = new URLSearchParams(location.search);
+    params.set("season", state.season);
+    history.pushState(state, "", `?${params}`);
+  }
+
+  // ── 로딩/에러/빈 상태 ──
+  function showLoading() {
+    const el = document.getElementById("loading");
+    if (el) el.style.display = "flex";
+  }
+  function hideLoading() {
+    const el = document.getElementById("loading");
+    if (el) el.style.display = "none";
+  }
+
+  function showEmptyState(container, message) {
+    container.innerHTML = `<tr><td colspan="10" class="empty-state">${message}</td></tr>`;
+  }
+
+  function showErrorState(container, message) {
+    container.innerHTML = `<tr><td colspan="10" class="error-state">${message}</td></tr>`;
+  }
+
+  // ── 랭킹 로드 ──
+  async function loadRanking() {
+    showLoading();
+    const rankingBody = document.getElementById("rankingBody");
+    const dateScoreBody = document.getElementById("dateScoreBody");
+    const rankingInfo = document.getElementById("rankingInfo");
+
+    try {
+      const res = await fetch("/ranking?season=" + currentSeason);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const data = await res.json();
+
+      if (data.error) {
+        showEmptyState(rankingBody, "이 시즌의 대국 데이터가 없습니다.");
+        showEmptyState(dateScoreBody, "");
+        if (rankingInfo) rankingInfo.textContent = "";
+        return;
       }
-    }
 
-    async function loadRanking() {
-      showLoading();
-      try {
-        const res = await fetch("/ranking?season=" + currentSeason);
-        const data = await res.json();
+      // 랭킹 테이블
+      if (rankingBody) {
+        rankingBody.innerHTML = "";
+        const filtered = data.ranking.filter(p => p.games > 0);
 
-        // 랭킹 테이블 업데이트
-        const rankingTable = document.getElementById("rankingBody");
-        if (rankingTable) {
-          rankingTable.innerHTML = "";
-          const filteredRanking = data.ranking.filter(player => player.games > 0);
-          filteredRanking.forEach(player => {
+        if (filtered.length === 0) {
+          showEmptyState(rankingBody, "이 시즌에 대국 기록이 있는 플레이어가 없습니다.");
+        } else {
+          // 최고치 계산
+          const maxSum = Math.max(...filtered.map(p => p.point_sum));
+          const maxAvg = Math.max(...filtered.map(p => p.point_avg));
+
+          filtered.forEach((player, i) => {
             const row = document.createElement("tr");
-            // 플레이어 이름 클릭 시 stats_page로 이동 (HTML 렌더링 페이지)
+            const sumClass = player.point_sum === maxSum ? "val-best" : "";
+            const avgClass = player.point_avg === maxAvg ? "val-best" : "";
             row.innerHTML = `
-              <td><a href="/stats_page/${player.name}?season=${currentSeason}">${player.name}</a></td>
+              <td><a href="/stats_page/${encodeURIComponent(player.name)}?season=${currentSeason}" style="color:#1a1a2e;font-weight:700;text-decoration:none;">${player.name}</a></td>
               <td>${player.games}</td>
-              <td>${player.point_sum.toFixed(1)}</td>
-              <td>${player.point_avg.toFixed(1)}</td>
+              <td class="${sumClass}">${player.point_sum.toFixed(1)}</td>
+              <td class="${avgClass}">${player.point_avg.toFixed(1)}</td>
             `;
-            rankingTable.appendChild(row);
+            rankingBody.appendChild(row);
           });
-          
-          // 총 대국수 계산: filteredRanking의 게임 수 합산
-          const totalGamesRaw = filteredRanking.reduce((sum, player) => sum + player.games, 0);
-          const totalGames = Math.floor(totalGamesRaw / 4); // 전체 게임수
-          const regulatedGames = Math.floor(totalGames * 0.3); // 규정 대국수: 전체 게임수의 30%
 
-          // rankingInfo 영역에 출력
-          document.getElementById("rankingInfo").textContent =
-            `규정 대국 수 ${regulatedGames} / 총 대국 수 ${totalGames}`;
-        } else {
-          console.error("rankingBody 요소를 찾을 수 없습니다.");
-        }
-
-        // 날짜별 점수 기록 업데이트
-        const headerElem = document.getElementById("dateScoreHeader");
-        if (headerElem) {
-          const headerRow = headerElem.querySelector("tr");
-          if (headerRow) {
-            headerRow.innerHTML = "<th style='min-width:80px;'>날짜</th>";
-            data.players.forEach(name => {
-              const th = document.createElement("th");
-              th.textContent = name;
-              th.style.minWidth = "80px";
-              headerRow.appendChild(th);
-            });
-          } else {
-            console.error("dateScoreHeader 내부에 <tr> 요소를 찾을 수 없습니다.");
+          // 총 대국수
+          const totalGamesRaw = filtered.reduce((s, p) => s + p.games, 0);
+          const totalGames = Math.floor(totalGamesRaw / 4);
+          const regulatedGames = Math.floor(totalGames * 0.3);
+          if (rankingInfo) {
+            rankingInfo.textContent = `규정 대국 수 ${regulatedGames} / 총 대국 수 ${totalGames}`;
           }
-        } else {
-          console.error("dateScoreHeader 요소를 찾을 수 없습니다.");
         }
+      }
 
-        const dateScoreBody = document.getElementById("dateScoreBody");
-        if (dateScoreBody) {
-          dateScoreBody.innerHTML = "";
-          data.daily.forEach(entry => {
+      // 날짜별 점수
+      const headerElem = document.getElementById("dateScoreHeader");
+      if (headerElem) {
+        const headerRow = headerElem.querySelector("tr");
+        if (headerRow) {
+          headerRow.innerHTML = "<th>날짜</th>";
+          (data.players || []).forEach(name => {
+            const th = document.createElement("th");
+            th.textContent = name;
+            headerRow.appendChild(th);
+          });
+        }
+      }
+
+      if (dateScoreBody) {
+        dateScoreBody.innerHTML = "";
+        const daily = data.daily || [];
+        if (daily.length === 0) {
+          showEmptyState(dateScoreBody, "날짜별 점수 데이터가 없습니다.");
+        } else {
+          daily.forEach(entry => {
             const row = document.createElement("tr");
             const dateCell = document.createElement("td");
             dateCell.textContent = entry.date.split("-")[0];
-            dateCell.style.minWidth = "80px";
+
+            // 날짜 클릭 → 패보 재생 팝업
+            if (entry.ref) {
+              dateCell.style.cursor = "pointer";
+              dateCell.style.color = "#5b8def";
+              dateCell.style.textDecoration = "underline";
+              dateCell.style.textDecorationStyle = "dotted";
+              dateCell.addEventListener("click", (e) => {
+                e.stopPropagation();
+                showViewerPopup(e, entry.ref);
+              });
+            }
+
             row.appendChild(dateCell);
-            data.players.forEach(name => {
+            (data.players || []).forEach(name => {
               const td = document.createElement("td");
-              td.textContent = entry.points[name] !== undefined ? entry.points[name].toFixed(1) : "-";
-              td.style.minWidth = "80px";
+              const val = entry.points[name];
+              if (val !== undefined) {
+                td.textContent = val.toFixed(1);
+                if (val > 0) td.className = "val-best";
+                else if (val < 0) td.className = "val-worst";
+              } else {
+                td.textContent = "-";
+                td.style.color = "#ccc";
+              }
               row.appendChild(td);
             });
             dateScoreBody.appendChild(row);
           });
-        } else {
-          console.error("dateScoreBody 요소를 찾을 수 없습니다.");
         }
-      } catch (error) {
-        console.error("Error loading ranking:", error);
-      } finally {
-        hideLoading();
       }
-    }
 
-    loadRanking();
-  });
+    } catch (error) {
+      console.error("Error loading ranking:", error);
+      if (rankingBody) showErrorState(rankingBody, "데이터를 불러오는 중 오류가 발생했습니다.");
+      if (dateScoreBody) dateScoreBody.innerHTML = "";
+      if (rankingInfo) rankingInfo.textContent = "";
+    } finally {
+      hideLoading();
+    }
+  }
+
+  loadRanking();
+
+  // ── 패보 재생 팝업 ──
+  let activePopup = null;
+
+  function closePopup() {
+    if (activePopup) { activePopup.remove(); activePopup = null; }
+  }
+
+  document.addEventListener("click", closePopup);
+
+  async function showViewerPopup(e, ref) {
+    closePopup();
+
+    // 팝업 생성
+    const popup = document.createElement("div");
+    popup.className = "viewer-popup";
+    popup.innerHTML = `<div class="viewer-popup-title">패보 재생</div><div class="viewer-popup-loading">불러오는 중...</div>`;
+    
+    // 위치 계산
+    const rect = e.target.getBoundingClientRect();
+    popup.style.position = "fixed";
+    popup.style.left = Math.min(rect.left, window.innerWidth - 160) + "px";
+    popup.style.top = (rect.bottom + 4) + "px";
+
+    document.body.appendChild(popup);
+    activePopup = popup;
+
+    // API 호출
+    try {
+      const res = await fetch(`/api/viewer/${encodeURIComponent(ref)}`);
+      const data = await res.json();
+
+      if (data.error) {
+        popup.querySelector(".viewer-popup-loading").textContent = "패보를 찾을 수 없습니다.";
+        return;
+      }
+
+      popup.innerHTML = `<div class="viewer-popup-title">패보 재생</div>` +
+        `<a href="${data.tenhou}" target="_blank" rel="noopener" class="viewer-popup-btn" onclick="event.stopPropagation()">천봉</a>` +
+        `<a href="${data.majsoul}" target="_blank" rel="noopener" class="viewer-popup-btn viewer-popup-btn-sub" onclick="event.stopPropagation()">작혼(일본) <span style="font-size:10px;color:#aaa;">로그인 필요</span></a>` +
+        `<a href="${data.majsoul_global}" target="_blank" rel="noopener" class="viewer-popup-btn viewer-popup-btn-sub" onclick="event.stopPropagation()">작혼(글로벌) <span style="font-size:10px;color:#aaa;">로그인 필요</span></a>`;
+    } catch (err) {
+      popup.querySelector(".viewer-popup-loading").textContent = "오류가 발생했습니다.";
+    }
+  }
+});

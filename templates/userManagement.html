@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block content %}
+<div id="loading" class="loading-overlay" style="display: none;">
+  <div class="spinner"></div>
+</div>
+
+<div class="stats-container">
+  <h1>유저 관리</h1>
+
+  <!-- 비밀번호 인증 -->
+  <div id="authSection">
+    <div class="form-group">
+      <label for="adminPw">관리 비밀번호</label>
+      <input type="password" id="adminPw" class="form-input" style="max-width:300px;" placeholder="비밀번호 입력">
+    </div>
+    <button class="btn-primary" onclick="authenticate()">인증</button>
+    <p id="authMsg" style="margin-top:8px;"></p>
+  </div>
+
+  <!-- 관리 패널 (인증 후 표시) -->
+  <div id="adminPanel" style="display:none;">
+    <div class="separator"></div>
+
+    <h2>등록된 유저</h2>
+    <table id="userTable">
+      <thead>
+        <tr>
+          <th>이름</th>
+          <th>별명 (aliases)</th>
+          <th>작업</th>
+        </tr>
+      </thead>
+      <tbody id="userBody"></tbody>
+    </table>
+
+    <div class="separator"></div>
+
+    <h2>유저 추가 / 수정</h2>
+    <div class="form-group">
+      <label for="userName">유저 이름</label>
+      <input type="text" id="userName" class="form-input" style="max-width:300px;" placeholder="표시 이름">
+    </div>
+    <div class="form-group">
+      <label for="userAliases">별명 (쉼표로 구분)</label>
+      <input type="text" id="userAliases" class="form-input" placeholder="작혼 닉네임1, 닉네임2, ...">
+    </div>
+    <input type="hidden" id="editingUser" value="">
+    <button class="btn-primary" onclick="saveUser()">저장</button>
+    <button class="btn-secondary" onclick="clearForm()" style="margin-left:8px;padding:10px 20px;border:1px solid #ddd;border-radius:8px;background:#fff;cursor:pointer;font-family:inherit;">초기화</button>
+    <p id="saveMsg" style="margin-top:8px;"></p>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/userManagement.js') }}"></script>
+{% endblock %}

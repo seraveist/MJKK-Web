@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block content %}
+<div id="loading" class="loading-overlay" style="display: none;">
+  <div class="spinner"></div>
+</div>
+
+<div class="stats-container">
+  <h1>대국 기록</h1>
+
+  <div class="season-tabs">
+    {% for s in available_seasons %}
+      <button class="tab {% if s|string == season|string %}active{% endif %}" data-season="{{ s }}">시즌 {{ s }}</button>
+    {% endfor %}
+    <button class="tab {% if season == 'all' %}active{% endif %}" data-season="all">전체</button>
+  </div>
+
+  <div class="separator"></div>
+
+  <div id="logInfo" style="text-align:right;font-size:13px;color:#888;margin-bottom:8px;"></div>
+
+  <div class="table-scroll-wrapper" style="max-height:70vh;">
+    <table id="logTable">
+      <thead>
+        <tr>
+          <th>날짜</th>
+          <th>1위</th>
+          <th>2위</th>
+          <th>3위</th>
+          <th>4위</th>
+          <th>패보</th>
+        </tr>
+      </thead>
+      <tbody id="logBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  window.config = { season: "{{ season }}" };
+</script>
+<script src="{{ url_for('static', filename='js/gameLogViewer.js') }}"></script>
+{% endblock %}

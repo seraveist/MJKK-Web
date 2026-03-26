@@ -1,0 +1,164 @@
+"""
+사전 계산 서비스 (Pre-compute)
+- 패보 업로드 시 호출
+- 해당 시즌: 즉시 계산 → precomputed_stats 저장
+- 전체(all): 백그라운드 스레드로 계산
+- 조회 시: precomputed_stats에서 즉시 반환
+"""
+import json
+import logging
+import threading
+import datetime
+
+from src import tenhouLog, tenhouStatistics
+from config.users import USERS, find_user_index
+
+logger = logging.getLogger(__name__)
+
+COLLECTION_NAME = "precomputed_stats"
+
+
+def _compute_all_player_stats(game_logs, users=None):
+    """
+    게임 로그로부터 모든 플레이어의 통계를 계산.
+    Returns: { "Kns2": {stats dict}, "HorTeNsiA": {stats dict}, ... }
+    """
+    if users is None:
+        users = USERS
+
+    if not game_logs:
+        return {}
+
+    total_games = [tenhouLog.game(log) for log in game_logs]
+    all_stats = {}
+
+    for user in users:
+        name = user["name"]
+        try:
+            ps = tenhouStatistics.PlayerStatistic(games=total_games, playerName=user)
+            stats = json.loads(ps.json())
+
+            if hasattr(ps, "rank") and hasattr(ps.rank, "datas"):
+                stats["rankData"] = ps.rank.datas
+            else:
+                stats["rankData"] = []
+
+            games = stats.get("games", 0)
+            if games > 0:
+                all_stats[name] = stats
+        except Exception as e:
+            logger.warning("Stats compute failed for %s: %s", name, e)
+
+    return all_stats
+
+
+def precompute_for_season(db_service, season_param):
+    """
+    특정 시즌의 통계를 계산하여 MongoDB에 저장.
+    """
+    try:
+        data = db_service.fetch_game_logs_for_stats(season_param)
+        if not data:
+            logger.info("No data for season %s, skipping precompute", season_param)
+            return
+
+        stats = _compute_all_player_stats(data)
+
+        col = db_service._db[COLLECTION_NAME]
+        col.update_one(
+            {"season": str(season_param)},
+            {
+                "$set": {
+                    "season": str(season_param),
+                    "stats": stats,
+                    "players": list(stats.keys()),
+                    "updated_at": datetime.datetime.utcnow(),
+                }
+            },
+            upsert=True,
+        )
+
+        logger.info("Precomputed stats saved: season=%s, players=%d", season_param, len(stats))
+    except Exception as e:
+        logger.error("Precompute failed for season %s: %s", season_param, e, exc_info=True)
+
+
+def precompute_after_upload(db_service, game_log):
+    """
+    패보 업로드 후 호출.
+    1) 해당 시즌 → 즉시 계산 (동기)
+    2) 전체(all) → 백그라운드 스레드
+    """
+    # 게임 날짜에서 시즌 번호 결정
+    season = _detect_season(db_service, game_log)
+
+    if season:
+        logger.info("Precomputing stats for season %s (sync)...", season)
+        # 캐시 무효화 (해당 시즌)
+        from services.cache import cache
+        cache.clear()
+
+        precompute_for_season(db_service, str(season))
+
+    # 전체(all)는 백그라운드
+    logger.info("Scheduling background precompute for 'all'...")
+    thread = threading.Thread(
+        target=_background_precompute_all,
+        args=(db_service,),
+        daemon=True,
+    )
+    thread.start()
+
+
+def _background_precompute_all(db_service):
+    """백그라운드에서 전체 시즌 통계 재계산"""
+    try:
+        precompute_for_season(db_service, "all")
+        logger.info("Background precompute for 'all' completed.")
+    except Exception as e:
+        logger.error("Background precompute failed: %s", e, exc_info=True)
+
+
+def precompute_all_seasons(db_service):
+    """
+    모든 시즌 + 전체를 한번에 계산. 앱 시작 시 또는 수동 트리거용.
+    """
+    current = db_service.get_current_season()
+    for s in range(1, current + 1):
+        precompute_for_season(db_service, str(s))
+    precompute_for_season(db_service, "all")
+    logger.info("All seasons precomputed (1~%d + all)", current)
+
+
+def get_precomputed_stats(db_service, season_param):
+    """
+    사전 계산된 통계를 조회.
+    Returns: { "players": [...], "stats": {...} } 또는 None
+    """
+    try:
+        col = db_service._db[COLLECTION_NAME]
+        doc = col.find_one(
+            {"season": str(season_param)},
+            {"_id": 0, "stats": 1, "players": 1, "updated_at": 1},
+        )
+        return doc
+    except Exception as e:
+        logger.error("Failed to fetch precomputed stats: %s", e)
+        return None
+
+
+def _detect_season(db_service, game_log):
+    """게임 로그의 날짜에서 시즌 번호를 결정."""
+    try:
+        date_str = game_log.get("title", [None, None])[1]
+        if not date_str:
+            return None
+        dt = datetime.datetime.strptime(date_str, "%Y-%m-%d")
+        base_year = db_service._config.SEASON_BASE_YEAR
+        if dt.month <= 6:
+            return (dt.year - base_year) * 2 + 1
+        else:
+            return (dt.year - base_year) * 2 + 2
+    except Exception as e:
+        logger.warning("Could not detect season from game log: %s", e)
+        return None

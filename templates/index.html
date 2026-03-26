@@ -6,39 +6,40 @@
 </div>
 
 <div class="stats-container">
-
-  <h1>🀄 마자까까 대시보드</h1>
+  <h1>대시보드</h1>
 
   <div class="season-tabs">
     {% for s in available_seasons %}
     <button class="tab {% if s|string == season|string %}active{% endif %}" data-season="{{ s }}">
       시즌 {{ s }}
     </button>
-  {% endfor %}
-  <button class="tab {% if season == 'all' %}active{% endif %}" data-season="all">전체</button>
+    {% endfor %}
+    <button class="tab {% if season == 'all' %}active{% endif %}" data-season="all">전체</button>
   </div>
 
   <div class="separator"></div>
 
-  <div id="rankingInfo" style="text-align:right; margin-bottom:10px; font-size:16px; font-weight: bold;"></div>
+  <div id="rankingInfo" style="text-align:right; margin-bottom:8px; font-size:13px; color:#888;"></div>
 
-  <table id="rankingTable">
-    <thead>
-      <tr>
-        <th>유저명</th>
-        <th>대국 수</th>
-        <th>우마 합산</th>
-        <th>우마 평균</th>
-      </tr>
-    </thead>
-    <tbody id="rankingBody"></tbody>
-  </table>
+  <!-- 랭킹 테이블 -->
+  <div id="rankingSection">
+    <table id="rankingTable">
+      <thead>
+        <tr>
+          <th>유저명</th>
+          <th>대국 수</th>
+          <th>우마 합산</th>
+          <th>우마 평균</th>
+        </tr>
+      </thead>
+      <tbody id="rankingBody"></tbody>
+    </table>
+  </div>
 
   <div class="separator"></div>
-  
-  <h1>📅 날짜별 점수 기록</h1>
-  <!-- 날짜별 점수 기록 테이블 영역에 vertical scroll 추가 -->
-  <div class="table-scroll-wrapper" style="max-height: 400px; overflow-y: auto;">
+
+  <h2>날짜별 점수 기록</h2>
+  <div class="table-scroll-wrapper" style="max-height:400px;">
     <table id="dateScoreTable">
       <thead id="dateScoreHeader">
         <tr><th>날짜</th></tr>
@@ -48,6 +49,9 @@
   </div>
 </div>
 
+<script>
+  window.config = { season: "{{ season }}" };
+</script>
 <script src="{{ url_for('static', filename='js/ranking.js') }}"></script>
 
 {% endblock %}

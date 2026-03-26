@@ -5,368 +5,427 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}마자까까 내전 집계{% endblock %}</title>
   <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='favicon-16x16.png') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
   <style>
-    /* 기본 리셋/레이아웃 */
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background-color: #f4f6f9;
-      margin: 0;
-      padding: 20px;
-    }
-    .separator {
-      width: 100%;
-      height: 1px;
-      background-color: #ccc;
-      margin: 20px 0;
+      font-family: 'Noto Sans KR', 'Segoe UI', sans-serif;
+      background-color: #f0f2f5;
+      color: #333;
+      padding: 16px;
+      -webkit-font-smoothing: antialiased;
     }
 
+    /* ── 네비게이션 ── */
     nav {
-      background-color: #222;
-      padding: 12px 0;
-      border-radius: 8px;
-      margin-bottom: 24px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-      text-align: left;
+      background: #1a1a2e;
+      padding: 0;
+      border-radius: 10px;
+      margin-bottom: 20px;
+      display: flex;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
     }
-
-    /* 기존 PC 스타일 */
     nav a {
-      color: #fff;
+      color: #b8b8cc;
       text-decoration: none;
-      margin: 0 20px;
+      padding: 14px 20px;
       font-weight: 500;
-      font-size: 16px;
-      transition: color 0.3s ease;
+      font-size: 14px;
+      white-space: nowrap;
+      transition: all 0.2s;
+      border-bottom: 2px solid transparent;
+    }
+    nav a:hover, nav a.active {
+      color: #fff;
+      background: rgba(255,255,255,0.05);
+      border-bottom-color: #5b8def;
     }
 
-    nav a:hover {
-      color: #ffcc00;
+    /* ── 메인 컨테이너 ── */
+    .stats-container {
+      max-width: 960px;
+      margin: 0 auto 30px;
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 1px 8px rgba(0,0,0,0.06);
+      padding: 24px;
     }
 
     h1 {
       text-align: center;
-      color: #333;
-      margin: 20px 0 30px; 
-    }
-
-    h2 {
-      text-align: left;
-      color: #333;
-      margin: 30px 0 20px;
       font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 20px;
+      color: #1a1a2e;
+    }
+    h2 {
+      font-size: 17px;
+      font-weight: 600;
+      margin: 24px 0 12px;
+      color: #1a1a2e;
     }
 
-    /* 메인 컨테이너 */
-    .stats-container {
-      max-width: 900px;
-      margin: 0 auto 40px;
-      background-color: #fff;
-      border-radius: 12px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-      padding: 24px;
-      overflow-x: auto;
+    .separator {
+      height: 1px;
+      background: #e8e8e8;
+      margin: 16px 0;
     }
 
-    /* 테이블 기본 스타일 */
+    /* ── 시즌 탭 ── */
+    .season-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: center;
+      margin-bottom: 16px;
+    }
+    .season-tabs .tab {
+      padding: 6px 14px;
+      border: 1px solid #ddd;
+      background: #fafafa;
+      cursor: pointer;
+      border-radius: 20px;
+      font-size: 13px;
+      font-family: inherit;
+      transition: all 0.2s;
+      color: #555;
+    }
+    .season-tabs .tab:hover {
+      border-color: #5b8def;
+      color: #5b8def;
+    }
+    .season-tabs .tab.active {
+      background: #5b8def;
+      color: #fff;
+      border-color: #5b8def;
+    }
+
+    /* ── 테이블 공통 ── */
     table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 16px;
-      table-layout: auto;
+      font-size: 13px;
     }
     th {
+      background: #f5f6f8;
+      color: #555;
+      font-weight: 600;
+      padding: 10px 12px;
       text-align: center;
-      font-size: 16px;
-      background-color: #eaeaea;
-      color: #222;
-      padding: 12px 10px;
+      border-bottom: 2px solid #e0e0e0;
+      position: relative;
     }
     td {
-      padding: 10px;
-      border-bottom: 1px solid #ddd;
-      font-size: 14px;
-    }
-    tr:nth-child(even) td {
-      background-color: #f9f9f9;
+      padding: 8px 12px;
+      text-align: center;
+      border-bottom: 1px solid #f0f0f0;
+      color: #444;
     }
     tr:hover td {
-      background-color: #f1f1f1;
+      background: #f8f9fc;
     }
-    td:first-child {
-      color: #333;
+    td:first-child, th:first-child {
+      text-align: left;
       font-weight: 500;
-    }
-    td:last-child {
-      text-align: center;
-      color: #000000;
-      font-weight: bold;
+      color: #333;
     }
 
-    /* 랭킹 테이블 */
-    #rankingTable {
-      margin-top: 20px;
-      margin-bottom: 20px;
+    /* ── 스크롤 래퍼 ── */
+    .table-scroll-wrapper {
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+      position: relative;
+      border: 1px solid #e8e8e8;
+      border-radius: 8px;
     }
-    #rankingTable th,
-    #rankingTable td {
-      padding: 10px;
-      border: 1px solid #ccc;
-      text-align: center;
+    .table-scroll-wrapper table {
+      min-width: max-content;
+      margin: 0;
+      border-collapse: separate;
+      border-spacing: 0;
+    }
+    .table-scroll-wrapper th,
+    .table-scroll-wrapper td {
+      border-bottom: 1px solid #f0f0f0;
     }
 
-    /* 날짜별 점수 테이블 */
-    #dateScoreTable {
-      margin-top: 0;
-      border-collapse: collapse;
-      table-layout: auto;
+    /* sticky 첫 번째 열 — 배경 불투명 + 그림자로 구분 */
+    .table-scroll-wrapper th:first-child,
+    .table-scroll-wrapper td:first-child {
+      position: sticky;
+      left: 0;
+      z-index: 2;
+      background: #fff;
+      box-shadow: 2px 0 4px rgba(0,0,0,0.04);
     }
-    #dateScoreTable td,
-    #dateScoreTable th {
-      font-weight: normal;
-      font-size: 14px;
-      text-align: center;
-      padding: 6px 10px;
-      white-space: nowrap;
-      border: 1px solid #ccc; 
+    .table-scroll-wrapper thead th:first-child {
+      background: #f5f6f8;
+      z-index: 5;
+      box-shadow: 2px 0 4px rgba(0,0,0,0.06);
     }
-    #dateScoreTable td:first-child,
-    #dateScoreTable th:first-child {
-      text-align: center;
-      padding-left: 12px;
-      font-size: 14px;
-      font-weight: bold;
+    /* sticky 열: 짝수행 + hover 배경 오버라이드 */
+    .table-scroll-wrapper tr:nth-child(even) > td:first-child,
+    .table-scroll-wrapper tr:nth-child(even) > th:first-child {
+      background: #f9f9fb;
     }
-    /* sticky 헤더 */
-    #dateScoreTable thead {
+    .table-scroll-wrapper tr:hover > td:first-child,
+    .table-scroll-wrapper tr:hover > th:first-child {
+      background: #f0f2f8;
+    }
+
+    /* sticky 헤더 행 */
+    .table-scroll-wrapper thead th {
       position: sticky;
       top: 0;
-      z-index: 10;
-    }
-    #dateScoreTable thead th {
-      background-color: #eaeaea;
-      border-bottom: 1px solid #ccc;
-      margin: 0;
-      padding: 6px 10px;
-    }
-    #dateScoreTable thead th:not(:first-child) {
-      font-size: 12px;
-      font-weight: bold;
-      text-align: center;  
+      z-index: 3;
+      background: #f5f6f8;
+      border-bottom: 2px solid #e0e0e0;
     }
 
-    /* 스크롤 컨테이너 */
-    .table-scroll-wrapper {
-      max-height: 400px;
-      overflow-y: auto;
-      margin: 0;
-      padding: 0;
-      position: relative;
-      width: 100%;
-      display: block;
-      -webkit-overflow-scrolling: touch;
-    }
-
-    /* 시즌 탭 */
-    .season-tabs {
-      margin-bottom: 20px;
+    /* ── 카테고리 탭 (개인통계용) ── */
+    .category-tabs {
       display: flex;
-      justify-content: center;
-      flex-wrap: wrap;
+      gap: 0;
+      border-bottom: 2px solid #e0e0e0;
+      margin-bottom: 0;
+      overflow-x: auto;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+      flex-wrap: nowrap;
+      scrollbar-width: none;
     }
-    .season-tabs .tab {
-      padding: 8px 16px;
-      border: 1px solid #ccc;
-      background-color: #f9f9f9;
+    .category-tabs::-webkit-scrollbar {
+      display: none;
+    }
+    .category-tabs .cat-tab {
+      padding: 10px 16px;
       cursor: pointer;
-      margin: 0 4px;
-      border-radius: 4px;
-      transition: background-color 0.3s ease;
+      font-size: 13px;
+      font-family: inherit;
+      font-weight: 500;
+      color: #888;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      white-space: nowrap;
+      flex-shrink: 0;
+      transition: all 0.2s;
     }
-    .season-tabs .tab:hover {
-      background-color: #eaeaea;
+    .category-tabs .cat-tab:hover {
+      color: #5b8def;
     }
-    .season-tabs .tab.active {
-      background-color: #3498db;
-      color: #fff;
-      border-color: #3498db;
+    .category-tabs .cat-tab.active {
+      color: #5b8def;
+      border-bottom-color: #5b8def;
     }
 
-    /* 로딩 애니메이션 */
+    /* ── 카테고리 헤더 (테이블 내) ── */
+    .category-header {
+      background: #f0f4ff !important;
+      font-weight: 600 !important;
+      color: #3a6fd8 !important;
+      font-size: 13px;
+      text-align: left !important;
+      padding: 8px 12px !important;
+    }
+
+    /* ── Min/Max 하이라이트 (전체통계용) ── */
+    .val-best {
+      color: #2563eb;
+      font-weight: 600;
+    }
+    .val-worst {
+      color: #dc2626;
+      font-weight: 600;
+    }
+
+    /* ── 그래프 ── */
+    .graph-container {
+      height: 250px;
+      margin-bottom: 8px;
+    }
+    .graph-controls {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      margin-bottom: 16px;
+    }
+    .graph-btn {
+      padding: 5px 14px;
+      border: 1px solid #ddd;
+      background: #fafafa;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-family: inherit;
+      transition: all 0.2s;
+    }
+    .graph-btn:hover {
+      border-color: #5b8def;
+      color: #5b8def;
+    }
+
+    /* ── 랭킹 테이블 ── */
+    #rankingTable a {
+      color: #5b8def;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    #rankingTable a:hover {
+      text-decoration: underline;
+    }
+
+    /* ── 패보 재생 팝업 ── */
+    .viewer-popup {
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 10px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+      padding: 10px;
+      z-index: 1000;
+      min-width: 140px;
+      animation: popupFadeIn 0.15s ease;
+    }
+    @keyframes popupFadeIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .viewer-popup-title {
+      font-size: 11px;
+      color: #888;
+      font-weight: 500;
+      margin-bottom: 6px;
+      padding: 0 4px;
+    }
+    .viewer-popup-loading {
+      font-size: 12px;
+      color: #aaa;
+      padding: 4px;
+    }
+    .viewer-popup-btn {
+      display: block;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      text-decoration: none;
+      color: #333;
+      transition: background 0.15s;
+    }
+    .viewer-popup-btn:hover {
+      background: #f0f4ff;
+      color: #5b8def;
+    }
+    .viewer-popup-btn-sub {
+      color: #666;
+    }
+
+    /* ── 폼 ── */
+    .form-group {
+      margin-bottom: 14px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: #555;
+      margin-bottom: 6px;
+    }
+    .form-input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+      transition: border-color 0.2s;
+    }
+    .form-input:focus {
+      outline: none;
+      border-color: #5b8def;
+      box-shadow: 0 0 0 3px rgba(91,141,239,0.1);
+    }
+    .btn-primary {
+      padding: 10px 24px;
+      background: #5b8def;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-primary:hover {
+      background: #4a7be0;
+    }
+
+    /* ── 메시지 ── */
+    .msg-success { color: #16a34a; font-weight: 600; }
+    .msg-error   { color: #dc2626; font-weight: 600; }
+    .msg-info    { color: #555; font-weight: 500; }
+
+    /* ── 빈 상태 / 에러 상태 ── */
+    .empty-state {
+      text-align: center !important;
+      color: #aaa !important;
+      font-weight: 400 !important;
+      padding: 32px 16px !important;
+      font-size: 14px;
+    }
+    .error-state {
+      text-align: center !important;
+      color: #dc2626 !important;
+      font-weight: 500 !important;
+      padding: 32px 16px !important;
+      font-size: 14px;
+    }
+
+    /* ── 로딩 ── */
     .loading-overlay {
       position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background-color: rgba(255, 255, 255, 0.8);
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(255,255,255,0.7);
       display: flex;
       align-items: center;
       justify-content: center;
-      z-index: 9999;
+      z-index: 1000;
     }
     .spinner {
-      border: 8px solid #f3f3f3;
-      border-top: 8px solid #3498db;
+      width: 36px; height: 36px;
+      border: 3px solid #e0e0e0;
+      border-top-color: #5b8def;
       border-radius: 50%;
-      width: 60px;
-      height: 60px;
-      animation: spin 1s linear infinite;
+      animation: spin 0.7s linear infinite;
     }
-    @keyframes spin {
-      from { transform: rotate(0deg); }
-      to   { transform: rotate(360deg); }
-    }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* 그래프 컨테이너 (default PC) */
-    .graph-container {
-      display: flex;
-      margin-bottom: 10px;    /* 아래 요소와 겹치지 않도록 여백 */
-      height: 200px;
-    }
-
-    .graph-controls
-    {
-      display: flex;
-      justify-content: center;
-      align-items: center;  
-    }
-    /* 그래프 컨트롤 버튼 그룹 */
-    .graph-controls .graph-btn {
-      margin: 10px 10px 10px 10px;
-      padding: 8px 16px;
-      border: 1px solid #ccc;
-      background-color: #f9f9f9;
-      cursor: pointer;
-      border-radius: 4px;
-      transition: background-color 0.3s ease;
-    }
-    .graph-controls .graph-btn:hover {
-      background-color: #eaeaea;
-    }
-
-    #totalStatsTable {
-      width: 100%;
-      border-collapse: collapse; /* collapse 유지 */
-      table-layout: auto;
-    }
-
-    /* 테이블 모든 셀에 기본 border */
-    #totalStatsTable th,
-    #totalStatsTable td {
-      border: 1px solid #ccc;
-      /* (3) 텍스트 줄바꿈 방지 */
-      white-space: nowrap;  
-      overflow: hidden;     /* 필요 시 오버플로 숨김 처리 */
-      text-align: center;
-    }
-
-    /* 행 배경색 번갈아 */
-    #totalStatsTable tbody tr:nth-child(even) {
-      background-color: #f9f9f9; /* 짝수행 회색, 홀수행 흰색 */
-    }
-
-    /* 헤더 셀(열 헤더) */
-    #totalStatsTable thead th {
-      position: sticky;
-      top: 0;
-      background-color: #b3b3b3;
-      z-index: 11;
-      padding: 10px 8px;
-      font-size: clamp(10px, 1vw, 12px);
-      /* (3) 줄바꿈 방지 */
-      white-space: nowrap;
-    }
-
-    /* 행 헤더(<tbody>의 첫 번째 열) */
-    #totalStatsTable tbody th {
-      position: sticky;
-      left: 0;
-      background-color: #fff;
-      z-index: 5;
-      padding: 10px 8px;
-      font-size: 12px;
-      text-align: center;
-      font-weight: bold;
-      /* border-collapse: collapse 환경에서 선이 뭉개지는 문제 완화:
-        box-shadow 또는 border를 명시적으로 지정 */
-      box-shadow: inset 2px 0 0 0 #ccc;
-
-      /* (3) 줄바꿈 방지 */
-      white-space: nowrap;
-    }
-
-    /* (2) 마지막 열에 볼드 해주는 기존 규칙을 오버라이드하여 제거 */
-    #totalStatsTable td:last-child,
-    #totalStatsTable {
-      font-weight: normal;
-      text-align: center; /* 원하면 정렬은 유지하되, 볼드만 제거 */
-      color: #000;
-    }
-
-    /* 반응형 (PC 해상도 이상) */
+    /* ── 반응형: PC ── */
     @media (min-width: 1200px) {
-      body {
-        padding: 40px;
-        font-size: 16px;
-      }
-      .stats-container {
-        max-width: 1200px;
-        padding: 40px;
-        margin: 40px auto;
-        box-shadow: 0 6px 20px rgba(0,0,0,0.15);
-      }
-      table {
-        font-size: 16px;
-      }
-      nav a {
-        font-size: 18px;
-        margin: 0 30px;
-      }
+      body { padding: 32px; }
+      .stats-container { max-width: 1100px; padding: 32px; }
+      table { font-size: 14px; }
+      nav a { padding: 14px 28px; font-size: 15px; }
     }
 
-    /* 모바일 대응 (화면 폭 600px 이하) */
+    /* ── 반응형: 모바일 ── */
     @media (max-width: 600px) {
-      .stats-container {
-        padding: 12px;
-      }
-      table, td, th {
-        font-size: 13px;
-      }
-      .graph-container {
-        height: 200px;
-      }
-
-      .graph-controls {
-        margin-bottom: 10px; /* 예시: 10px로 간격 조정 */
-      }
-
-      #statsTable {
-        margin-top: 10px; /* 적당한 간격으로 조정 */
-      }
-      .season-tabs .tab {
-        width: auto;
-        margin: 20px 5px; /* 세로 간격 추가 */
-        padding: 4px 4px; /* 버튼 사이즈 축소 */
-        font-size: 14px; /* 글자 크기 축소 */
-      }
-      nav {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        text-align: center;
-      }
-      nav a {
-        margin: 5px;              /* 버튼 간 간격을 줄이고, 아래쪽 여백 추가 */
-        font-size: 14px;          /* 모바일용 폰트 크기 약간 조정 가능 */
-        white-space: normal;      /* 텍스트 줄바꿈 허용 */
-        word-break: keep-all;     /* 단어 중간에서 줄바꿈 방지 */
-        flex: 1 1 auto;           /* 가능하면 각 버튼이 동등한 너비를 차지 */
-        max-width: 40%;           /* 한 줄에 2개 정도 배치(필요에 따라 조정) */
-      }
+      body { padding: 10px; }
+      .stats-container { padding: 14px; border-radius: 8px; }
+      h1 { font-size: 17px; }
+      table { font-size: 12px; }
+      td, th { padding: 6px 8px; }
+      .graph-container { height: 180px; }
+      .season-tabs .tab { padding: 5px 10px; font-size: 12px; }
+      nav a { padding: 12px 14px; font-size: 13px; }
     }
+
+    {% block custom_css %}{% endblock %}
   </style>
 </head>
 <body>
@@ -374,7 +433,11 @@
     <a href="/">대시보드</a>
     <a href="/stats">개인 통계</a>
     <a href="/totalstats">전체 통계</a>
+    <a href="/compare">비교</a>
+    <a href="/trend">추이</a>
+    <a href="/games">대국 기록</a>
     <a href="/upload_log">패보 등록</a>
+    <a href="/admin/users">관리</a>
   </nav>
   {% block content %}{% endblock %}
 </body>
