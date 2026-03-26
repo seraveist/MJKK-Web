@@ -11,7 +11,7 @@ try:
 except ImportError:
     pass
 
-app = Flask(__name__, template_folder="templates", static_folder="static")
+from flask import Flask
 
 from config import get_config
 import config.users as users_module
@@ -25,26 +25,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# 사용자 데이터 (하드코딩, 나중에 DB 또는 외부 설정으로 관리 가능)
-USERS = [
-    {'name': 'Kns2', 'aliases': ['Kns2', 'ganado']},
-    {'name': 'HorTeNsiA', 'aliases': ['HorTeNsiA', '筒美絹香']},
-    {'name': 'jongja', 'aliases': ['jongja']},
-    {'name': 'ARKANA', 'aliases': ['ARKANA', 'BingHayu']},
-    {'name': 'N@Gi', 'aliases': ['N@Gi', 'cloudsin']},
-    {'name': 'セラビー', 'aliases': ['セラビー', 'ラビビビ', 'MeikyouShisui']},
-    {'name': 'SinYoA', 'aliases': ['SinYoA', 'RyuYoA']},
-    {'name': '한벼리', 'aliases': ['한벼리']},
-    {'name': '맬렁호랭이', 'aliases': ['맬렁호랭이']},
-    {'name': '黑荏子', 'aliases': ['黑荏子']},
-    {'name': '숭악', 'aliases': ['숭악']},
-    {'name': '적극적인소극성', 'aliases': ['적극적인소극성']},
-    {'name': '최하노', 'aliases': ['최하노']},
-    {'name': '쵸로기', 'aliases': ['쵸로기']},
-    {'name': '무흐루', 'aliases': ['무흐루']},
-    {'name': '태어닝', 'aliases': ['태어닝']},
-    {'name': 'nyabru', 'aliases': ['nyabru']}
-]
+def create_app(config=None):
+    app = Flask(
+        __name__,
+        template_folder="templates",
+        static_folder="static",
+    )
 
     if config is None:
         config = get_config()
@@ -98,4 +84,4 @@ def _register_error_handlers(app):
 app = create_app()
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8080, debug=False)
+    app.run(host="0.0.0.0", port=8080, debug=True)
