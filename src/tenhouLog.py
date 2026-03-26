@@ -406,8 +406,23 @@ class log(object):
         if not self.isSomeoneZimo(): return False
         return self.changeScore[0][playerIndex] > 0
 
-    def isRong(self, playerIndex):
-        return self.isWin(playerIndex) and not self.isSomeoneZimo()
+        if '飜' in score[0]:
+            fu = int(score[0].split('符')[0])
+        if '-' in score[0] or '∀' in score[0]:
+            isTsumo = True
+        oriScore = CalcScore(fan, fu, isHost, isTsumo)
+        lastScore = CalcScore(fan - dora_inner, fu, isHost, isTsumo)
+        return oriScore-lastScore
+        
+    def isKazoe(self):
+        score = self.logObj[16][2][3]
+        if '数え役満' in score:
+            return True
+        return False
+            
+    @property
+    def doraPtr(self):
+        return self._doraPtr
 
     def isDoubleChong(self, playerIndex):
         return len(self.changeScore) if self.isChong(playerIndex) else 0
@@ -421,10 +436,165 @@ class log(object):
     def endRound(self, playerIndex):
         return len(self.logObj[6 + playerIndex * 3])
 
-    def isYifa(self, playerIndex):
-        if self.isDraw: return False
-        for i, sc in enumerate(self.changeScore):
-            if sc[playerIndex] > 0:
-                for yaku in self.yakus[i]:
-                    if "Ippatsu" in yaku or "一発" in yaku: return True
-        return False
+    @property
+    def dora_akai(self):
+        return self._dora_akai      
+
+    @property
+    def playerSum(self):
+        return self._playerSum
+    
+    @property
+    def name(self):
+        return log.gameIndexDes(self.logObj[0])
+
+    @property
+    def isDraw(self):
+        return self.result != u'和了'
+    
+    @property
+    def _resultObj(self):
+        return self.logObj[4 + 3 * self._playerSum]
+
+    @property
+    def result(self):
+        return self._resultObj[0]
+
+    @property
+    def changeScoreDes(self):
+        if self.isDraw:
+            return [self.result]
+        else:
+            return [lst[3] for lst in self._resultObj[2::2]]
+    
+    @property
+    def fan(self):
+        return self._fan   
+
+    @property
+    def yakus(self):
+        if self.isDraw:
+            return []
+        else:
+            return [lst[4:] for lst in self._resultObj[2::2]]
+
+    @property
+    def yakuNames(self):
+        return [[n[:-4] for n in yakus if not "Dora" in n or not "ドラ" in n]
+                for yakus in self.yakus]
+    
+    @property
+    def gameWindIndex(self):
+        return self.logObj[0][0]
+
+    @property
+    def gameRoundIndex(self):
+        return self.logObj[0][1]
+
+    @property
+    def winnerIndex(self):
+        return self._winnerIndex
+
+    @property
+    def loserIndex(self):
+        return self._loserIndex
+    
+    @property
+    def startScore(self):
+        return self.logObj[1]
+        
+    @property
+    def changeScore(self):
+        if self.isDraw:
+            if len(self._resultObj) > 1:
+                return [self._resultObj[1]]
+            else:
+                return [[0] * self.playerSum]
+        else:
+            return self._resultObj[1::2]
+
+    @property
+    def endScore(self):
+        return self._endScore  
+
+    @staticmethod
+    def gameIndexDes(indexTuple):
+        changfeng = MJCard.dxnb[indexTuple[0] / 4 + 1]
+        changshu  = MJCard.chnum(indexTuple[0] % 4 + 1)
+        changju   = indexTuple[1]
+        return u"%s%s局%s本场" % (changfeng, changshu, changju)       
+    
+class MJCard(object):
+    """docstring for MJCard"""
+    PostfixNames = [
+        u"", u"萬", u"筒", u"索", u""
+    ]
+    WordPerfixNames = [
+    
+        u"", u"東", u"南", u"西", u"北", u"白", u"發", u"中"
+    ]
+    dxnb = [
+        u"", u"東", u"南", u"西", u"北"
+    ]
+    numb = [
+        u"零", u"一", u"二", u"三", u"四", u"五", u"六", u"七", u"八", u"九"
+    ]
+    numx = [
+        u"", u"十", u"百", u"千", u"万", u"十万", u"百万", u"千万", u"亿"
+    ]
+
+    def __init__(self, ID, akai = False, zmgr = False):
+        super(MJCard, self).__init__()
+        self.ID = int(ID)
+        self.akai = akai
+        self.zmgr = zmgr
+        self.dora_outer = 0
+        self.dora_inner = 0
+
+        text = u"赤" if self.akai else u""
+        if self.ID > 40:
+            text += MJCard.WordPerfixNames[self.ID % 10]
+        else:
+            text += MJCard.chnum(self.ID % 10) + MJCard.PostfixNames[int(self.ID / 10)]
+        self._name = text
+
+    def __str__(self):
+        return self._name.encode("utf-8")
+    
+    def __lt__(self, target):
+        return self.ID < target.ID
+
+    def PointTo(self, target):
+        if not target:
+            return False
+        if self.ID / 10 != target.ID / 10:
+            return False
+        else:
+            distance = target.ID - self.ID
+            return distance == 1 or distance == -8
+
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def dora(self):
+        return self.dora_inner + self.dora_outer
+
+    @staticmethod
+    def chnum(num):
+        num = abs(int(num))
+        if num == 0:
+            return MJCard.numb[num]
+        s = u""
+        upper = False
+        for lvl in range(10, -1, -1):
+            x = int(num / (10 ** lvl))
+            if x:
+                upper = True
+                num -= x * (10 ** lvl)
+                s += MJCard.numb[x] + MJCard.numx[lvl]
+            elif upper:
+                upper = False
+                s += MJCard.numb[x]
+        return s
