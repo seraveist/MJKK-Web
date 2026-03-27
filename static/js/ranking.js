@@ -91,10 +91,13 @@ document.addEventListener("DOMContentLoaded", () => {
       const latestDate = dates.length > 0 ? dates[0] : "-";
 
       summaryLine.innerHTML = `
-        <span><span class="s-label">총 대국</span><span class="s-val">${Math.round(totalGames)}국</span></span>
-        <span><span class="s-label">참가</span><span class="s-val">${filtered.length}명</span></span>
-        <span><span class="s-label">최근</span><span class="s-val">${latestDate}</span></span>
-        <span><span class="s-label">최다</span><span class="s-val">${topPlayer ? topPlayer.name + " " + topPlayer.games + "국" : "-"}</span></span>
+        <span class="s-item"><span class="s-label">총 대국</span><span class="s-val">${Math.round(totalGames)}국</span></span>
+        <span class="s-sep">|</span>
+        <span class="s-item"><span class="s-label">참가</span><span class="s-val">${filtered.length}명</span></span>
+        <span class="s-sep">|</span>
+        <span class="s-item"><span class="s-label">최근</span><span class="s-val">${latestDate}</span></span>
+        <span class="s-sep">|</span>
+        <span class="s-item"><span class="s-label">최다</span><span class="s-val">${topPlayer ? topPlayer.name + " " + topPlayer.games + "국" : "-"}</span></span>
       `;
 
       // 대국이 있는 유저 목록 (#2)
