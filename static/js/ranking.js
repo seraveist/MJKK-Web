@@ -4,6 +4,10 @@
  */
 document.addEventListener("DOMContentLoaded", () => {
   let currentSeason = window.config ? window.config.season : "all";
+  let rankingFiltered = [];
+  let rankingElo = {};
+  let rankSortKey = "games";
+  let rankSortDesc = true;
 
   const urlSeason = new URLSearchParams(location.search).get("season");
   if (urlSeason) { currentSeason = urlSeason; syncTabUI(currentSeason); }
@@ -103,34 +107,25 @@ document.addEventListener("DOMContentLoaded", () => {
       // 대국이 있는 유저 목록 (#2)
       const activePlayerNames = new Set(filtered.map(p => p.name));
 
-      // 랭킹 테이블 (ELO 열 포함)
-      if (rankingBody) {
-        rankingBody.innerHTML = "";
-        const sorted = [...filtered].sort((a, b) => {
-          if (b.games !== a.games) return b.games - a.games;
-          if (b.point_avg !== a.point_avg) return b.point_avg - a.point_avg;
-          return b.point_sum - a.point_sum;
-        });
-        if (sorted.length === 0) {
-          rankingBody.innerHTML = '<tr><td colspan="4" class="empty-state">대국 기록이 있는 플레이어가 없습니다.</td></tr>';
-          return;
-        }
-        sorted.forEach(p => {
-          const row = document.createElement("tr");
-          const pointColor = p.point_sum >= 0 ? "var(--color-best)" : "var(--color-worst)";
-          const avgColor = p.point_avg >= 0 ? "var(--color-best)" : "var(--color-worst)";
-          const elo = eloRatings[p.name];
-          const eloStr = elo ? Math.round(elo) : "-";
-          const eloDiff = elo ? Math.round(elo - 1500) : 0;
-          const eloColor = eloDiff > 0 ? "var(--color-best)" : eloDiff < 0 ? "var(--color-worst)" : "var(--text-tertiary)";
-          row.innerHTML = `<td><a href="/stats_page/${encodeURIComponent(p.name)}?season=${currentSeason}">${p.name}</a> <span style="font-size:11px;color:${eloColor};font-weight:500;">${elo ? eloStr : ""}</span></td>
-            <td>${p.games}</td>
-            <td style="color:${pointColor};font-weight:600;">${p.point_sum >= 0 ? "+" : ""}${p.point_sum.toFixed(1)}</td>
-            <td style="color:${avgColor};font-weight:600;">${p.point_avg >= 0 ? "+" : ""}${p.point_avg.toFixed(2)}</td>`;
-          rankingBody.appendChild(row);
-        });
-        rankingInfo.textContent = `${filtered.length}명 / ${Math.round(totalGames)}국`;
-      }
+      // 랭킹 데이터 저장 (정렬용)
+      rankingFiltered = filtered;
+      rankingElo = eloRatings;
+      renderRankingTable();
+
+      // 정렬 헤더 클릭 핸들러
+      document.querySelectorAll(".sortable").forEach(th => {
+        th.onclick = function () {
+          const key = this.dataset.sort;
+          if (rankSortKey === key) { rankSortDesc = !rankSortDesc; }
+          else { rankSortKey = key; rankSortDesc = true; }
+          // 화살표 업데이트
+          document.querySelectorAll(".sortable").forEach(h => {
+            const arrow = h.dataset.sort === rankSortKey ? (rankSortDesc ? " ▼" : " ▲") : "";
+            h.textContent = h.textContent.replace(/ [▼▲]/, "") + arrow;
+          });
+          renderRankingTable();
+        };
+      });
 
       // 날짜별 점수 (#2: 대국 있는 유저만)
       if (dateScoreBody && data.daily) {
@@ -171,6 +166,41 @@ document.addEventListener("DOMContentLoaded", () => {
       console.error(e);
       rankingBody.innerHTML = '<tr><td colspan="4" class="error-state">데이터를 불러오는 중 오류가 발생했습니다.</td></tr>';
     }
+  }
+
+  // ── 랭킹 테이블 렌더링 (정렬 가능) ──
+  function renderRankingTable() {
+    const rankingBody = document.getElementById("rankingBody");
+    const rankingInfo = document.getElementById("rankingInfo");
+    if (!rankingBody || rankingFiltered.length === 0) {
+      if (rankingBody) rankingBody.innerHTML = '<tr><td colspan="4" class="empty-state">대국 기록이 있는 플레이어가 없습니다.</td></tr>';
+      return;
+    }
+
+    const sorted = [...rankingFiltered].sort((a, b) => {
+      const va = a[rankSortKey] || 0;
+      const vb = b[rankSortKey] || 0;
+      return rankSortDesc ? vb - va : va - vb;
+    });
+
+    rankingBody.innerHTML = "";
+    sorted.forEach(p => {
+      const row = document.createElement("tr");
+      const pointColor = p.point_sum >= 0 ? "var(--color-best)" : "var(--color-worst)";
+      const avgColor = p.point_avg >= 0 ? "var(--color-best)" : "var(--color-worst)";
+      const elo = rankingElo[p.name];
+      const eloStr = elo ? Math.round(elo) : "";
+      const eloDiff = elo ? Math.round(elo - 1500) : 0;
+      const eloColor = eloDiff > 0 ? "var(--color-best)" : eloDiff < 0 ? "var(--color-worst)" : "var(--text-tertiary)";
+      row.innerHTML = `<td><a href="/stats_page/${encodeURIComponent(p.name)}?season=${currentSeason}">${p.name}</a>${elo ? ` <span style="font-size:11px;color:${eloColor};font-weight:500;">${eloStr}</span>` : ""}</td>
+        <td>${p.games}</td>
+        <td style="color:${pointColor};font-weight:600;">${p.point_sum >= 0 ? "+" : ""}${p.point_sum.toFixed(1)}</td>
+        <td style="color:${avgColor};font-weight:600;">${p.point_avg >= 0 ? "+" : ""}${p.point_avg.toFixed(2)}</td>`;
+      rankingBody.appendChild(row);
+    });
+
+    const totalGames = rankingFiltered.reduce((s, p) => s + p.games, 0) / 4;
+    rankingInfo.textContent = `${rankingFiltered.length}명 / ${Math.round(totalGames)}국`;
   }
 
   // ── 메타 분석 ──

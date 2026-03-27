@@ -79,7 +79,12 @@
   <div id="rankingInfo" style="text-align:right; margin-bottom:8px; font-size:13px; color:var(--text-tertiary);"></div>
   <div id="rankingSection">
     <table id="rankingTable">
-      <thead><tr><th>유저명</th><th>대국 수</th><th>우마 합산</th><th>우마 평균</th></tr></thead>
+      <thead><tr>
+        <th>유저명</th>
+        <th class="sortable" data-sort="games" style="cursor:pointer;">대국 수 ▼</th>
+        <th class="sortable" data-sort="point_sum" style="cursor:pointer;">우마 합산</th>
+        <th class="sortable" data-sort="point_avg" style="cursor:pointer;">우마 평균</th>
+      </tr></thead>
       <tbody id="rankingBody"></tbody>
     </table>
   </div>

@@ -384,6 +384,24 @@ def get_game_detail(ref):
             for i in range(player_count):
                 cumulative_scores[i] += score_changes[i]
 
+            # 역 정보 추출
+            yakus_info = []
+            if not rnd.isDraw and rnd.yakus:
+                for yi, yaku_list in enumerate(rnd.yakus):
+                    # 화료자 시트 찾기
+                    win_seat = -1
+                    for si in range(player_count):
+                        if yi < len(rnd.changeScore) and si < len(rnd.changeScore[yi]) and rnd.changeScore[yi][si] > 0:
+                            win_seat = si
+                            break
+                    cleaned = []
+                    for y in yaku_list:
+                        if "Dora" in y or "ドラ" in y or "Red" in y or "赤" in y:
+                            continue
+                        cleaned.append(y.split("(")[0])
+                    if cleaned:
+                        yakus_info.append({"seat": win_seat, "yakus": cleaned})
+
             rounds.append({
                 "label": round_label,
                 "startScores": start_scores,
@@ -391,6 +409,7 @@ def get_game_detail(ref):
                 "cumulativeChanges": list(cumulative_scores),
                 "resultType": result_type,
                 "winner": winner,
+                "yakus": yakus_info,
             })
 
         return jsonify({

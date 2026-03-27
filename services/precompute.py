@@ -108,6 +108,15 @@ def precompute_after_upload(db_service, game_log):
 
         precompute_for_season(db_service, str(season))
 
+        # 해당 시즌 ELO 즉시 재계산 (대시보드에 바로 반영)
+        try:
+            from services.elo import calculate_elo_for_season, save_elo_to_db
+            elo_data = calculate_elo_for_season(db_service, str(season))
+            if elo_data:
+                save_elo_to_db(db_service, str(season), elo_data)
+        except Exception as e:
+            logger.warning("Sync ELO recompute failed (non-fatal): %s", e)
+
     # 전체(all)는 백그라운드
     logger.info("Scheduling background precompute for 'all'...")
     thread = threading.Thread(
@@ -169,14 +178,32 @@ def _invalidate_season_cache(cache, season):
 
 
 def _background_precompute_all(db_service):
-    """백그라운드에서 전체 시즌 통계 재계산"""
+    """백그라운드에서 전체 시즌 통계 + ELO 재계산"""
     try:
         from services.cache import cache
         _invalidate_season_cache(cache, "all")
         precompute_for_season(db_service, "all")
-        logger.info("Background precompute for 'all' completed.")
+
+        # ELO 자동 재계산 (해당 시즌 + all)
+        _recompute_elo(db_service)
+
+        logger.info("Background precompute + ELO for 'all' completed.")
     except Exception as e:
         logger.error("Background precompute failed: %s", e, exc_info=True)
+
+
+def _recompute_elo(db_service):
+    """현재 시즌 + all의 ELO를 재계산하여 저장"""
+    try:
+        from services.elo import calculate_elo_for_season, save_elo_to_db
+        current = db_service.get_current_season()
+        for s in [str(current), "all"]:
+            elo_data = calculate_elo_for_season(db_service, s)
+            if elo_data:
+                save_elo_to_db(db_service, s, elo_data)
+                logger.info("ELO recomputed for season %s", s)
+    except Exception as e:
+        logger.warning("ELO recompute failed: %s", e)
 
 
 def precompute_all_seasons(db_service):

@@ -1,20 +1,16 @@
 /**
- * totalStats.js — 전체 유저 통계
+ * totalStats.js — 전체 유저 통계 (v3)
  * - 배치 API, 최고/최저 하이라이팅
- * - URL 상태 (season → 뒤로가기 지원)
- * - 에러/빈 상태 처리
+ * - [신규] ELO 열 추가
  */
 
 let currentSeason = window.config ? window.config.season : "all";
 let allPlayers = [];
 let userStats = {};
+let eloRatings = {};
 
-// URL에서 복원
 const urlSeason = new URLSearchParams(location.search).get("season");
-if (urlSeason) {
-  currentSeason = urlSeason;
-  syncTabUI(currentSeason);
-}
+if (urlSeason) { currentSeason = urlSeason; syncTabUI(currentSeason); }
 
 function syncTabUI(season) {
   document.querySelectorAll(".season-tabs .tab").forEach(t => {
@@ -37,7 +33,6 @@ window.addEventListener("popstate", (e) => {
   }
 });
 
-// ── 시즌 탭 ──
 document.querySelectorAll(".season-tabs .tab").forEach(tab => {
   tab.addEventListener("click", () => {
     document.querySelectorAll(".season-tabs .tab").forEach(t => t.classList.remove("active"));
@@ -61,10 +56,23 @@ async function loadTotalStats() {
   const tbody = document.getElementById("totalStatsBody");
 
   try {
-    const res = await fetch(`/totalstats_api?season=${currentSeason}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    // 통계 + ELO 병렬 로딩
+    const [statsRes, eloRes] = await Promise.all([
+      fetch(`/totalstats_api?season=${currentSeason}`),
+      fetch(`/api/elo?season=${currentSeason}`).catch(() => null),
+    ]);
 
-    const data = await res.json();
+    if (!statsRes.ok) throw new Error(`HTTP ${statsRes.status}`);
+    const data = await statsRes.json();
+
+    // ELO 데이터
+    eloRatings = {};
+    try {
+      if (eloRes && eloRes.ok) {
+        const eloData = await eloRes.json();
+        eloRatings = eloData.ratings || {};
+      }
+    } catch (e) { /* ELO 없어도 정상 진행 */ }
 
     if (data.error) {
       tbody.innerHTML = `<tr><td class="empty-state">${
@@ -97,21 +105,59 @@ async function loadTotalStats() {
 }
 
 function buildTable() {
-  // 헤더
   const headerRow = document.getElementById("colHeader");
+  headerRow.innerHTML = "<th>항목</th>";
   allPlayers.forEach(p => {
     const th = document.createElement("th");
     th.textContent = p;
     headerRow.appendChild(th);
   });
 
-  // 바디
   const tbody = document.getElementById("totalStatsBody");
   tbody.innerHTML = "";
 
+  // [신규] ELO 행 추가
+  if (Object.keys(eloRatings).length > 0) {
+    const eloRow = document.createElement("tr");
+    const eloTh = document.createElement("th");
+    eloTh.textContent = "ELO 레이팅";
+    eloRow.appendChild(eloTh);
+
+    const eloCells = [];
+    const eloVals = [];
+    allPlayers.forEach(p => {
+      const td = document.createElement("td");
+      const elo = eloRatings[p];
+      if (elo) {
+        td.textContent = Math.round(elo);
+        td.style.fontWeight = "600";
+        eloVals.push(elo);
+      } else {
+        td.textContent = "-";
+        eloVals.push(null);
+      }
+      eloCells.push(td);
+      eloRow.appendChild(td);
+    });
+
+    // 최고/최저 하이라이팅
+    const validElo = eloVals.filter(v => v !== null);
+    if (validElo.length >= 2) {
+      const maxElo = Math.max(...validElo);
+      const minElo = Math.min(...validElo);
+      if (maxElo !== minElo) {
+        eloVals.forEach((v, i) => {
+          if (v === maxElo) eloCells[i].className = "val-best";
+          else if (v === minElo) eloCells[i].className = "val-worst";
+        });
+      }
+    }
+    tbody.appendChild(eloRow);
+  }
+
+  // 기존 통계 행
   for (const [key, { label, format, higherIsBetter }] of Object.entries(display_keys)) {
     const row = document.createElement("tr");
-
     const th = document.createElement("th");
     th.textContent = label;
     row.appendChild(th);
@@ -128,7 +174,6 @@ function buildTable() {
       row.appendChild(td);
     });
 
-    // 최고/최저 하이라이팅
     if (higherIsBetter !== null && higherIsBetter !== undefined) {
       const valid = rawValues.filter(v => v !== null);
       if (valid.length >= 2) {
@@ -143,7 +188,6 @@ function buildTable() {
         }
       }
     }
-
     tbody.appendChild(row);
   }
 }

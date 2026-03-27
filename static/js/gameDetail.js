@@ -116,6 +116,8 @@ function renderScoreFlowChart(data) {
   });
 }
 
+const YAKU_KR = {"門前清自摸和":"멘젠쯔모","立直":"리치","一発":"일발","平和":"핑후","断幺九":"탕야오","一盃口":"이페코","混一色":"혼일색","清一色":"청일색","七対子":"치또이","三色同順":"삼색동순","一気通貫":"일기통관","対々和":"또이또이","混全帯幺九":"찬타","三色同刻":"삼색동각","混老頭":"혼노두","三暗刻":"산안커","小三元":"소삼원","二盃口":"량페코","純全帯幺九":"준찬타","嶺上開花":"영상개화","海底摸月":"해저로월","河底撈魚":"하저로어","槍槓":"창깡","両立直":"더블리치","国士無双":"국사무쌍","四暗刻":"스안커","大三元":"대삼원","小四喜":"소사희","大四喜":"대사희","字一色":"자일색","緑一色":"녹일색","清老頭":"청노두","九蓮宝燈":"구련보등","Riichi":"리치","Ippatsu":"일발","Pinfu":"핑후","Tanyao":"탕야오","Iipeiko":"이페코","Honitsu":"혼일색","Chinitsu":"청일색","Chiitoitsu":"치또이","Toitoi":"또이또이","Sanankou":"산안커","Shousangen":"소삼원","Chanta":"찬타","Ittsu":"일기통관","Sanshoku":"삼색동순","Sanshoku Doukou":"삼색동각","Honroutou":"혼노두","Junchan":"준찬타","Ryanpeikou":"량페코","Rinshan Kaihou":"영상개화","Haitei":"해저로월","Houtei":"하저로어","Chankan":"창깡","Tsumo":"멘젠쯔모"};
+
 function renderRoundsList(data) {
   const container = document.getElementById("roundsList");
   const rounds = data.rounds || [];
@@ -137,6 +139,15 @@ function renderRoundsList(data) {
 
     const winnerName = r.winner >= 0 && r.winner < names.length ? names[r.winner] : "";
 
+    // 역 표시
+    let yakuStr = "";
+    if (r.yakus && r.yakus.length > 0) {
+      const yakuNames = r.yakus.flatMap(y => y.yakus).map(y => YAKU_KR[y] || y);
+      if (yakuNames.length > 0) {
+        yakuStr = `<div style="font-size:11px;color:var(--color-accent);margin-top:2px;">${yakuNames.join(" / ")}</div>`;
+      }
+    }
+
     const scores = names.map((name, i) => {
       const change = r.scoreChanges[i] || 0;
       const color = change > 0 ? "var(--color-best)" : change < 0 ? "var(--color-worst)" : "var(--text-tertiary)";
@@ -149,7 +160,7 @@ function renderRoundsList(data) {
 
     return `<div class="round-row">
       <div class="round-label">${r.label}</div>
-      <div style="min-width:70px;">${resultBadge}${winnerName ? ` <span style="font-size:12px;color:var(--text-secondary);">${winnerName}</span>` : ""}</div>
+      <div style="min-width:90px;">${resultBadge}${winnerName ? ` <span style="font-size:12px;color:var(--text-secondary);">${winnerName}</span>` : ""}${yakuStr}</div>
       <div class="round-scores">${scores}</div>
     </div>`;
   }).join("");
