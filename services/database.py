@@ -36,7 +36,7 @@ class DatabaseService:
             self._collection.create_index([("name", ASCENDING)], background=True)
 
             # [신규] title.1 + name 복합 인덱스 — 시즌+플레이어 필터링
-            self._collection.create_index([("title.1", ASCENDING), ("name", ASCENDING)], background=True)
+            #self._collection.create_index([("title.1", ASCENDING), ("name", ASCENDING)], background=True)
 
             logger.info("Connected to MongoDB. DB=%s, indexes created.", self._config.DB_NAME)
         except Exception as e:
