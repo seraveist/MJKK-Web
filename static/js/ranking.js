@@ -55,36 +55,52 @@ document.addEventListener("DOMContentLoaded", () => {
     const rankingBody = document.getElementById("rankingBody");
     const dateScoreBody = document.getElementById("dateScoreBody");
     const rankingInfo = document.getElementById("rankingInfo");
-    const summaryCards = document.getElementById("summaryCards");
+    const summaryLine = document.getElementById("summaryLine");
 
     try {
-      const res = await fetch("/ranking?season=" + currentSeason);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
+      // 랭킹 + ELO 병렬 로딩
+      const [rankRes, eloRes] = await Promise.all([
+        fetch("/ranking?season=" + currentSeason),
+        fetch("/api/elo?season=" + currentSeason).catch(() => null),
+      ]);
+
+      if (!rankRes.ok) throw new Error(`HTTP ${rankRes.status}`);
+      const data = await rankRes.json();
+
+      let eloRatings = {};
+      try {
+        if (eloRes && eloRes.ok) {
+          const eloData = await eloRes.json();
+          eloRatings = eloData.ratings || {};
+        }
+      } catch (e) { /* ELO 없어도 정상 진행 */ }
 
       if (data.error) {
         rankingBody.innerHTML = '<tr><td colspan="4" class="empty-state">이 시즌의 대국 데이터가 없습니다.</td></tr>';
         dateScoreBody.innerHTML = "";
-        summaryCards.innerHTML = "";
+        summaryLine.innerHTML = "";
         rankingInfo.textContent = "";
         return;
       }
 
-      // 요약 카드 (가로 한줄)
+      // 요약
       const filtered = data.ranking.filter(p => p.games > 0);
       const totalGames = filtered.reduce((s, p) => s + p.games, 0) / 4;
       const topPlayer = filtered.length > 0 ? [...filtered].sort((a, b) => b.games - a.games)[0] : null;
       const dates = (data.daily || []).map(d => d.date).filter(Boolean);
       const latestDate = dates.length > 0 ? dates[0] : "-";
 
-      summaryCards.innerHTML = `
-        <div class="s-card"><span class="label">총 대국</span><span class="value">${Math.round(totalGames)}</span></div>
-        <div class="s-card"><span class="label">참가</span><span class="value">${filtered.length}명</span></div>
-        <div class="s-card"><span class="label">최근</span><span class="value">${latestDate}</span></div>
-        <div class="s-card"><span class="label">최다</span><span class="value">${topPlayer ? topPlayer.name : "-"}</span></div>
+      summaryLine.innerHTML = `
+        <span><span class="s-label">총 대국</span><span class="s-val">${Math.round(totalGames)}국</span></span>
+        <span><span class="s-label">참가</span><span class="s-val">${filtered.length}명</span></span>
+        <span><span class="s-label">최근</span><span class="s-val">${latestDate}</span></span>
+        <span><span class="s-label">최다</span><span class="s-val">${topPlayer ? topPlayer.name + " " + topPlayer.games + "국" : "-"}</span></span>
       `;
 
-      // 랭킹 테이블 (#6: 대국수 → 우마평균 → 우마합산 순)
+      // 대국이 있는 유저 목록 (#2)
+      const activePlayerNames = new Set(filtered.map(p => p.name));
+
+      // 랭킹 테이블 (ELO 열 포함)
       if (rankingBody) {
         rankingBody.innerHTML = "";
         const sorted = [...filtered].sort((a, b) => {
@@ -100,7 +116,11 @@ document.addEventListener("DOMContentLoaded", () => {
           const row = document.createElement("tr");
           const pointColor = p.point_sum >= 0 ? "var(--color-best)" : "var(--color-worst)";
           const avgColor = p.point_avg >= 0 ? "var(--color-best)" : "var(--color-worst)";
-          row.innerHTML = `<td><a href="/stats_page/${encodeURIComponent(p.name)}?season=${currentSeason}">${p.name}</a></td>
+          const elo = eloRatings[p.name];
+          const eloStr = elo ? Math.round(elo) : "-";
+          const eloDiff = elo ? Math.round(elo - 1500) : 0;
+          const eloColor = eloDiff > 0 ? "var(--color-best)" : eloDiff < 0 ? "var(--color-worst)" : "var(--text-tertiary)";
+          row.innerHTML = `<td><a href="/stats_page/${encodeURIComponent(p.name)}?season=${currentSeason}">${p.name}</a> <span style="font-size:11px;color:${eloColor};font-weight:500;">${elo ? eloStr : ""}</span></td>
             <td>${p.games}</td>
             <td style="color:${pointColor};font-weight:600;">${p.point_sum >= 0 ? "+" : ""}${p.point_sum.toFixed(1)}</td>
             <td style="color:${avgColor};font-weight:600;">${p.point_avg >= 0 ? "+" : ""}${p.point_avg.toFixed(2)}</td>`;
@@ -109,11 +129,13 @@ document.addEventListener("DOMContentLoaded", () => {
         rankingInfo.textContent = `${filtered.length}명 / ${Math.round(totalGames)}국`;
       }
 
-      // 날짜별 점수
+      // 날짜별 점수 (#2: 대국 있는 유저만)
       if (dateScoreBody && data.daily) {
+        const activePlayers = data.players.filter(name => activePlayerNames.has(name));
+
         const header = document.getElementById("dateScoreHeader").querySelector("tr");
         header.innerHTML = "<th>날짜</th>";
-        data.players.forEach(name => {
+        activePlayers.forEach(name => {
           const th = document.createElement("th");
           th.textContent = name;
           header.appendChild(th);
@@ -129,7 +151,7 @@ document.addEventListener("DOMContentLoaded", () => {
           tdDate.addEventListener("click", () => showViewerPopup(d.ref, tdDate));
           row.appendChild(tdDate);
 
-          data.players.forEach(name => {
+          activePlayers.forEach(name => {
             const td = document.createElement("td");
             const val = d.points[name];
             if (val !== undefined) {

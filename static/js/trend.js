@@ -33,37 +33,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     const data = await res.json();
     allPlayers = data.allPlayers || [];
 
-    // 우마 추이: 체크박스
-    const container = document.getElementById("trendPlayerChecks");
-    allPlayers.forEach((p, i) => {
-      const label = document.createElement("label");
-      label.style.cssText = "display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer;";
-      const cb = document.createElement("input");
-      cb.type = "checkbox"; cb.value = p;
-      if (i < 4) cb.checked = true;
-      cb.addEventListener("change", loadTrend);
-      label.appendChild(cb); label.append(p);
-      container.appendChild(label);
-    });
-
-    // ELO: 체크박스
-    const eloContainer = document.getElementById("eloPlayerChecks");
-    allPlayers.forEach((p, i) => {
-      const label = document.createElement("label");
-      label.style.cssText = "display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer;";
-      const cb = document.createElement("input");
-      cb.type = "checkbox"; cb.value = p; cb.className = "elo-player-check";
-      if (i < 4) cb.checked = true;
-      cb.addEventListener("change", renderEloChart);
-      label.appendChild(cb); label.append(p);
-      eloContainer.appendChild(label);
-    });
-
-    // 시즌 비교: 플레이어 셀렉트
+    // 시즌 비교: 플레이어 셀렉트 (전체 유저)
     const sel = document.getElementById("seasonCmpPlayer");
     allPlayers.forEach(p => { const o = document.createElement("option"); o.value = p; o.textContent = p; sel.appendChild(o); });
 
-    // URL 파라미터로 탭 자동 전환 (개인통계 → 시즌비교 링크)
+    // 활성 유저 기반 체크박스 빌드
+    await rebuildPlayerChecks();
+
+    // URL 파라미터로 탭 자동 전환
     const urlParams = new URLSearchParams(location.search);
     const viewParam = urlParams.get("view");
     const playerParam = urlParams.get("player");
@@ -81,22 +58,68 @@ document.addEventListener("DOMContentLoaded", async () => {
   } catch (e) { console.error(e); }
 });
 
+async function rebuildPlayerChecks() {
+  // 현재 시즌 랭킹에서 대국 있는 유저만 추출
+  let activePlayers = allPlayers;
+  try {
+    const rankRes = await fetch(`/ranking?season=${trendSeason}`);
+    if (rankRes.ok) {
+      const rankData = await rankRes.json();
+      if (rankData.ranking) {
+        const activeSet = new Set(rankData.ranking.filter(p => p.games > 0).map(p => p.name));
+        activePlayers = allPlayers.filter(p => activeSet.has(p));
+      }
+    }
+  } catch (e) { /* fallback to all */ }
+
+  // 우마 추이 체크박스 재빌드
+  const container = document.getElementById("trendPlayerChecks");
+  container.innerHTML = "";
+  activePlayers.forEach((p, i) => {
+    const label = document.createElement("label");
+    label.style.cssText = "display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer;";
+    const cb = document.createElement("input");
+    cb.type = "checkbox"; cb.value = p;
+    if (i < 4) cb.checked = true;
+    cb.addEventListener("change", loadTrend);
+    label.appendChild(cb); label.append(p);
+    container.appendChild(label);
+  });
+
+  // ELO 체크박스 재빌드
+  const eloContainer = document.getElementById("eloPlayerChecks");
+  eloContainer.innerHTML = "";
+  activePlayers.forEach((p, i) => {
+    const label = document.createElement("label");
+    label.style.cssText = "display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer;";
+    const cb = document.createElement("input");
+    cb.type = "checkbox"; cb.value = p; cb.className = "elo-player-check";
+    if (i < 4) cb.checked = true;
+    cb.addEventListener("change", renderEloChart);
+    label.appendChild(cb); label.append(p);
+    eloContainer.appendChild(label);
+  });
+}
+
 // ── 시즌 탭 (우마 추이) ──
 document.querySelectorAll(".trend-season").forEach(tab => {
-  tab.addEventListener("click", function () {
+  tab.addEventListener("click", async function () {
     document.querySelectorAll(".trend-season").forEach(t => t.classList.remove("active"));
     this.classList.add("active");
     trendSeason = this.dataset.season;
+    await rebuildPlayerChecks();
     loadTrend();
   });
 });
 
 // ── 시즌 탭 (ELO) ──
 document.querySelectorAll(".elo-season").forEach(tab => {
-  tab.addEventListener("click", function () {
+  tab.addEventListener("click", async function () {
     document.querySelectorAll(".elo-season").forEach(t => t.classList.remove("active"));
     this.classList.add("active");
     eloSeason = this.dataset.season;
+    trendSeason = this.dataset.season; // 체크박스 동기화용
+    await rebuildPlayerChecks();
     loadElo();
   });
 });
@@ -145,19 +168,31 @@ async function loadTrend() {
 // ══════════════════════════════════════
 let eloData = null;
 
-async function loadElo() {
+async function loadElo(force) {
   document.getElementById("loading").style.display = "flex";
   const emptyEl = document.getElementById("eloEmpty");
+  const infoEl = document.getElementById("eloInfo");
+  if (force) infoEl.textContent = "재계산 중...";
   try {
-    const res = await fetch(`/api/elo?season=${eloSeason}`);
+    const url = `/api/elo?season=${eloSeason}${force ? "&force=1" : ""}`;
+    const res = await fetch(url);
     const data = await res.json();
     if (data.error || !data.ratings) {
       emptyEl.textContent = "ELO 데이터가 없습니다."; emptyEl.style.display = "";
-      document.getElementById("eloRankingWrap").style.display = "none"; return;
+      document.getElementById("eloRankingWrap").style.display = "none";
+      infoEl.textContent = "";
+      return;
     }
     eloData = data;
     emptyEl.style.display = "none";
     document.getElementById("eloRankingWrap").style.display = "";
+
+    // 업데이트 시각
+    if (data.updated_at) {
+      infoEl.textContent = `마지막 계산: ${data.updated_at.slice(0, 19).replace("T", " ")}`;
+    } else {
+      infoEl.textContent = force ? "계산 완료" : "";
+    }
 
     // 레이팅 테이블
     const sorted = Object.entries(data.ratings).sort((a, b) => b[1] - a[1]);

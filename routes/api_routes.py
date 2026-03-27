@@ -502,12 +502,15 @@ def get_elo():
     db = _get_db()
     try:
         season_param = request.args.get("season", str(db.get_current_season()))
+        force = request.args.get("force", "0") == "1"
         from services.elo import get_elo_from_db, calculate_elo_for_season, save_elo_to_db
 
-        cached = get_elo_from_db(db, season_param)
-        if cached:
-            return jsonify(cached)
+        if not force:
+            cached = get_elo_from_db(db, season_param)
+            if cached and cached.get("ratings"):
+                return jsonify(cached)
 
+        # 캐시 없거나 force → 재계산
         elo_data = calculate_elo_for_season(db, season_param)
         if not elo_data:
             return jsonify({"error": "No game data found"}), 404

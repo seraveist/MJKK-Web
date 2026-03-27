@@ -103,6 +103,9 @@ def precompute_after_upload(db_service, game_log):
         # [개선] 해당 시즌 + 전체 관련 캐시만 선별 무효화
         _invalidate_season_cache(cache, str(season))
 
+        # ELO 캐시 무효화 (MongoDB)
+        _invalidate_elo_cache(db_service, str(season))
+
         precompute_for_season(db_service, str(season))
 
     # 전체(all)는 백그라운드
@@ -113,6 +116,17 @@ def precompute_after_upload(db_service, game_log):
         daemon=True,
     )
     thread.start()
+
+
+def _invalidate_elo_cache(db_service, season):
+    """ELO 캐시 무효화 (해당 시즌 + all)"""
+    try:
+        col = db_service._db["elo_ratings"]
+        result = col.delete_many({"season": {"$in": [season, "all"]}})
+        if result.deleted_count > 0:
+            logger.info("ELO cache invalidated: %d entries for seasons [%s, all]", result.deleted_count, season)
+    except Exception as e:
+        logger.warning("ELO cache invalidation failed: %s", e)
 
 
 def _invalidate_season_cache(cache, season):
