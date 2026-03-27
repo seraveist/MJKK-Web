@@ -17,11 +17,16 @@
 <div class="stats-container">
   <h1>개인 통계</h1>
 
-  <div class="season-tabs">
-    {% for s in available_seasons %}
-      <button class="tab {% if s|string == season|string %}active{% endif %}" data-season="{{ s }}">시즌 {{ s }}</button>
-    {% endfor %}
-    <button class="tab {% if season == 'all' %}active{% endif %}" data-season="all">전체</button>
+  <div style="margin-bottom:12px;">
+    <div style="font-size:13px;font-weight:500;color:var(--text-secondary);margin-bottom:6px;">시즌 선택 (복수 가능)</div>
+    <div class="season-tabs" id="seasonCheckArea">
+      {% for s in available_seasons %}
+        <label class="tab season-check-label" style="cursor:pointer;display:flex;align-items:center;gap:4px;">
+          <input type="checkbox" class="season-chk" value="{{ s }}" {% if s|string == season|string %}checked{% endif %}> 시즌 {{ s }}
+        </label>
+      {% endfor %}
+      <button class="tab" id="btnAllSeason" onclick="selectAllSeasons()">전체</button>
+    </div>
   </div>
 
   <div class="separator"></div>
@@ -37,7 +42,10 @@
   <div class="nav-btns" id="navBtns" style="display:none;">
     <a id="linkCompare" href="/compare">이 플레이어와 비교하기</a>
     <a id="linkMatchup" href="/matchup">상성 보기</a>
+    <a id="linkSeasonCmp" href="/trend">시즌 비교</a>
   </div>
+
+  <div class="separator"></div>
 
   <!-- [신규] 연승/연패 -->
   <div id="streakSection" style="display:none;">

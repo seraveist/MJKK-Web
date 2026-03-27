@@ -35,9 +35,6 @@ class DatabaseService:
             # [신규] name 멀티키 인덱스 — 특정 플레이어가 포함된 게임 검색
             self._collection.create_index([("name", ASCENDING)], background=True)
 
-            # [신규] title.1 + name 복합 인덱스 — 시즌+플레이어 필터링
-            #self._collection.create_index([("title.1", ASCENDING), ("name", ASCENDING)], background=True)
-
             logger.info("Connected to MongoDB. DB=%s, indexes created.", self._config.DB_NAME)
         except Exception as e:
             logger.error("Failed to connect to MongoDB", exc_info=e)
@@ -49,24 +46,42 @@ class DatabaseService:
             raise RuntimeError("Database not connected.")
         return self._collection
 
+    def _season_to_date_range(self, season):
+        """단일 시즌 번호 → (start_date, end_date) 변환"""
+        base_year = self._config.SEASON_BASE_YEAR
+        if season % 2 == 1:
+            year = base_year + season // 2
+            return f"{year}-01-01", f"{year}-06-30"
+        else:
+            year = base_year + (season - 1) // 2
+            return f"{year}-07-01", f"{year}-12-31"
+
     def _season_filter(self, season_param):
         if season_param == "all":
             return {}
+
+        # 멀티 시즌 지원: "5,6,7" 형태
+        if isinstance(season_param, str) and "," in season_param:
+            parts = [p.strip() for p in season_param.split(",") if p.strip()]
+            or_conditions = []
+            for p in parts:
+                try:
+                    s = int(p)
+                    start, end = self._season_to_date_range(s)
+                    or_conditions.append({"title.1": {"$gte": start, "$lte": end}})
+                except (ValueError, TypeError):
+                    continue
+            if not or_conditions:
+                raise ValueError(f"Invalid seasons: {season_param}")
+            return {"$or": or_conditions} if len(or_conditions) > 1 else or_conditions[0]
+
+        # 단일 시즌
         try:
             season = int(season_param)
         except (ValueError, TypeError):
             raise ValueError(f"Invalid season: {season_param}")
 
-        base_year = self._config.SEASON_BASE_YEAR
-        if season % 2 == 1:
-            year = base_year + season // 2
-            start = f"{year}-01-01"
-            end = f"{year}-06-30"
-        else:
-            year = base_year + (season - 1) // 2
-            start = f"{year}-07-01"
-            end = f"{year}-12-31"
-
+        start, end = self._season_to_date_range(season)
         return {"title.1": {"$gte": start, "$lte": end}}
 
     def fetch_game_logs(self, season_param, lightweight=False):

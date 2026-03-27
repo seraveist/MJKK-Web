@@ -42,7 +42,6 @@ def calculate_elo_for_season(db_service, season_param, K=DEFAULT_K, NORM=DEFAULT
     for game_log in data:
         title = game_log.get("title", ["", ""])
         date = title[1] if len(title) > 1 else ""
-        log_data = game_log.get("log", [])
         names_raw = game_log.get("name", [])
 
         # 게임 내 플레이어를 유저에 매핑
@@ -55,27 +54,21 @@ def calculate_elo_for_season(db_service, season_param, K=DEFAULT_K, NORM=DEFAULT
         if len(seat_to_user) < 2:
             continue
 
-        # 각 국별로 ELO 업데이트
-        for round_data in (log_data or []):
-            if not round_data or len(round_data) < 16:
-                continue
+        # tenhouLog 파서로 정확한 국별 데이터 추출
+        try:
+            parsed = tenhouLog.game(game_log)
+        except Exception as e:
+            logger.warning("ELO: failed to parse game %s: %s", date, e)
+            continue
 
-            round_info = round_data[0] if round_data[0] else []
-            player_count = min(4, len(names_raw))
+        player_count = len(names_raw)
 
-            # 점수 변동 추출
-            result_block = round_data[16] if len(round_data) > 16 else None
-            if not result_block:
-                continue
-
+        for rnd in parsed.logs:
+            # 국별 점수 변동 합산
             deltas = [0] * player_count
-
-            if isinstance(result_block, list) and len(result_block) >= 1:
-                score_arr = result_block[0] if isinstance(result_block[0], list) else result_block
-                if isinstance(score_arr, list):
-                    for i in range(min(player_count, len(score_arr))):
-                        if isinstance(score_arr[i], (int, float)):
-                            deltas[i] = score_arr[i]
+            for sc_arr in rnd.changeScore:
+                for i in range(min(player_count, len(sc_arr))):
+                    deltas[i] += sc_arr[i]
 
             # 제로섬 검증
             if sum(deltas) != 0 or all(d == 0 for d in deltas):
