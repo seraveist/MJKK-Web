@@ -1,19 +1,17 @@
 {% extends "base.html" %}
 {% block content %}
-<div id="loading" class="loading-overlay" style="display: none;">
-  <div class="spinner"></div>
-</div>
+<div id="loading" class="loading-overlay" style="display: none;"><div class="spinner"></div></div>
 
 <div class="stats-container">
   <h1>추이 / 분석</h1>
 
-  <!-- 메인 탭: 우마 추이 vs 시즌 비교 -->
   <div class="category-tabs" style="margin-bottom:16px;">
     <button class="cat-tab active" data-view="trend">우마 추이</button>
+    <button class="cat-tab" data-view="elo">ELO 레이팅</button>
     <button class="cat-tab" data-view="seasonCmp">시즌 비교</button>
   </div>
 
-  <!-- ====== 우마 추이 뷰 ====== -->
+  <!-- 우마 추이 -->
   <div id="trendView">
     <div class="season-tabs">
       {% for s in available_seasons %}
@@ -22,25 +20,45 @@
       <button class="tab trend-season {% if season == 'all' %}active{% endif %}" data-season="all">전체</button>
     </div>
     <div class="separator"></div>
-
     <div class="form-group">
       <label>플레이어 선택 (복수 가능)</label>
       <div id="trendPlayerChecks" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
     </div>
-
-    <div class="graph-container" style="height:320px;">
-      <canvas id="trendChart"></canvas>
-    </div>
+    <div class="graph-container" style="height:320px;"><canvas id="trendChart"></canvas></div>
     <p id="trendEmpty" class="empty-state" style="display:none;">데이터가 없습니다.</p>
   </div>
 
-  <!-- ====== 시즌 비교 뷰 ====== -->
+  <!-- ELO 레이팅 -->
+  <div id="eloView" style="display:none;">
+    <div class="season-tabs">
+      {% for s in available_seasons %}
+        <button class="tab elo-season {% if s|string == season|string %}active{% endif %}" data-season="{{ s }}">시즌 {{ s }}</button>
+      {% endfor %}
+      <button class="tab elo-season {% if season == 'all' %}active{% endif %}" data-season="all">전체</button>
+    </div>
+    <div class="separator"></div>
+
+    <div id="eloRankingWrap" style="margin-bottom:16px;">
+      <table id="eloTable">
+        <thead><tr><th>플레이어</th><th>레이팅</th><th>변동</th></tr></thead>
+        <tbody id="eloBody"></tbody>
+      </table>
+    </div>
+
+    <div class="form-group">
+      <label>레이팅 추이 플레이어 선택</label>
+      <div id="eloPlayerChecks" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+    </div>
+    <div class="graph-container" style="height:320px;"><canvas id="eloChart"></canvas></div>
+    <p id="eloEmpty" class="empty-state" style="display:none;">데이터가 없습니다.</p>
+  </div>
+
+  <!-- 시즌 비교 -->
   <div id="seasonCmpView" style="display:none;">
     <div class="form-group">
       <label for="seasonCmpPlayer">플레이어</label>
       <select id="seasonCmpPlayer" class="form-input" style="max-width:240px;"></select>
     </div>
-
     <div class="form-group">
       <label>비교할 시즌 (복수 선택)</label>
       <div id="seasonCmpChecks" style="display:flex;flex-wrap:wrap;gap:8px;">
@@ -52,10 +70,8 @@
         {% endfor %}
       </div>
     </div>
-
     <button class="btn-primary" onclick="loadSeasonCompare()">비교</button>
     <div class="separator"></div>
-
     <div id="seasonCmpTableWrap" style="display:none;">
       <div class="table-scroll-wrapper">
         <table id="seasonCmpTable">

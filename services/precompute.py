@@ -4,6 +4,7 @@
 - 해당 시즌: 즉시 계산 → precomputed_stats 저장
 - 전체(all): 백그라운드 스레드로 계산
 - 조회 시: precomputed_stats에서 즉시 반환
+- [개선] 캐시 무효화 정밀화: 해당 시즌 키만 선별 삭제
 """
 import json
 import logging
@@ -88,15 +89,19 @@ def precompute_after_upload(db_service, game_log):
     패보 업로드 후 호출.
     1) 해당 시즌 → 즉시 계산 (동기)
     2) 전체(all) → 백그라운드 스레드
+
+    [개선] 캐시 무효화를 전체 clear → 해당 시즌 관련 키만 선별 삭제
     """
+    from services.cache import cache
+
     # 게임 날짜에서 시즌 번호 결정
     season = _detect_season(db_service, game_log)
 
     if season:
         logger.info("Precomputing stats for season %s (sync)...", season)
-        # 캐시 무효화 (해당 시즌)
-        from services.cache import cache
-        cache.clear()
+
+        # [개선] 해당 시즌 + 전체 관련 캐시만 선별 무효화
+        _invalidate_season_cache(cache, str(season))
 
         precompute_for_season(db_service, str(season))
 
@@ -110,9 +115,50 @@ def precompute_after_upload(db_service, game_log):
     thread.start()
 
 
+def _invalidate_season_cache(cache, season):
+    """
+    [개선] 해당 시즌 관련 캐시 키만 선별 무효화.
+    - 해당 시즌의 player_stats, total_stats, ranking 등
+    - 'all' 시즌 캐시도 함께 무효화 (전체 통계에 영향)
+    - 다른 시즌 캐시는 유지 → 캐시 히트율 보존
+    """
+    import hashlib
+
+    # make_cache_key는 MD5 해시를 쓰므로, 패턴 매칭 불가
+    # 대신 알려진 키 패턴들을 직접 무효화
+    seasons_to_invalidate = [season, "all"]
+
+    invalidated = 0
+    for s in seasons_to_invalidate:
+        # player_stats 캐시 (모든 플레이어)
+        from config.users import USERS
+        for user in USERS:
+            for count in [10, 50, 100]:
+                key = hashlib.md5(
+                    f"player_stats:{user['name']}:{s}:{count}".encode()
+                ).hexdigest()
+                if cache.get(key) is not None:
+                    cache.delete(key)
+                    invalidated += 1
+
+        # total_stats 캐시
+        key = hashlib.md5(f"total_stats:{s}".encode()).hexdigest()
+        if cache.get(key) is not None:
+            cache.delete(key)
+            invalidated += 1
+
+    if invalidated > 0:
+        logger.info(
+            "Selective cache invalidation: %d keys for seasons %s",
+            invalidated, seasons_to_invalidate,
+        )
+
+
 def _background_precompute_all(db_service):
     """백그라운드에서 전체 시즌 통계 재계산"""
     try:
+        from services.cache import cache
+        _invalidate_season_cache(cache, "all")
         precompute_for_season(db_service, "all")
         logger.info("Background precompute for 'all' completed.")
     except Exception as e:
@@ -123,6 +169,9 @@ def precompute_all_seasons(db_service):
     """
     모든 시즌 + 전체를 한번에 계산. 앱 시작 시 또는 수동 트리거용.
     """
+    from services.cache import cache
+    cache.clear()  # 전체 재계산 시에만 전체 클리어
+
     current = db_service.get_current_season()
     for s in range(1, current + 1):
         precompute_for_season(db_service, str(s))

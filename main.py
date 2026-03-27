@@ -1,8 +1,12 @@
 """
 마자까까 내전 집계 — 메인 애플리케이션
+- [개선] flask-compress: API 응답 gzip 압축
+- [개선] JSON 구조화 로깅
 """
 import logging
 import os
+import json
+import datetime
 
 try:
     from dotenv import load_dotenv
@@ -18,10 +22,36 @@ import config.users as users_module
 from services.database import DatabaseService
 from routes import register_blueprints
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
+
+# ── JSON 구조화 로깅 포매터 ──
+class JSONFormatter(logging.Formatter):
+    def format(self, record):
+        log_obj = {
+            "time": datetime.datetime.utcnow().isoformat() + "Z",
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
+        if record.exc_info and record.exc_info[0]:
+            log_obj["exception"] = self.formatException(record.exc_info)
+        return json.dumps(log_obj, ensure_ascii=False)
+
+
+def _setup_logging():
+    env = os.getenv("FLASK_ENV", "production").lower()
+    if env == "production":
+        handler = logging.StreamHandler()
+        handler.setFormatter(JSONFormatter())
+        logging.root.handlers = [handler]
+        logging.root.setLevel(logging.INFO)
+    else:
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        )
+
+
+_setup_logging()
 logger = logging.getLogger(__name__)
 
 
@@ -36,12 +66,20 @@ def create_app(config=None):
         config = get_config()
     app.config["APP_CONFIG"] = config
 
+    # [개선] flask-compress
+    try:
+        from flask_compress import Compress
+        Compress(app)
+        logger.info("flask-compress enabled")
+    except ImportError:
+        logger.info("flask-compress not installed, skipping compression")
+
     # DB 서비스 초기화
     db_service = DatabaseService(config)
     db_service.connect()
     app.config["DB_SERVICE"] = db_service
 
-    # MongoDB에서 유저 목록 로드 (있으면)
+    # MongoDB에서 유저 목록 로드
     _init_users_from_db(db_service)
 
     # Blueprint 등록
@@ -55,7 +93,6 @@ def create_app(config=None):
 
 
 def _init_users_from_db(db_service):
-    """MongoDB usersConfig 컬렉션에서 유저 로드 (비어있으면 기본값 유지)"""
     try:
         users_col = db_service._db["usersConfig"]
         db_users = list(users_col.find({}, {"_id": 0, "name": 1, "aliases": 1}))

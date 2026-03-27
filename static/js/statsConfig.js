@@ -1,13 +1,6 @@
 /**
- * statsConfig.js — 통계 표시 설정 (공용)
- * 
- * 새 통계 항목 추가: 이 파일에 키 하나만 추가하면 됩니다.
- * 백엔드 수정 불필요.
- * 
- * higherIsBetter: 전체 통계에서 최고/최저 하이라이팅에 사용
- *   true  → 높을수록 파란색(best), 낮을수록 빨간색(worst)
- *   false → 반대 (예: 방총률은 낮을수록 좋음)
- *   null  → 하이라이팅 안 함 (예: 대국 수)
+ * statsConfig.js — 통계 표시 설정 (v3)
+ * [변경] richi_yifa.per (일발율) 추가
  */
 
 const display_keys = {
@@ -52,6 +45,7 @@ const display_keys = {
   "richi.avg":           { label: "리치율",           format: "percent", category: "리치 및 후로", higherIsBetter: null },
   "richi_score.avg":     { label: "리치 수지",        format: "int",     category: "리치 및 후로", higherIsBetter: true },
   "richi_winGame.per":   { label: "리치 화료율",      format: "percent", category: "리치 및 후로", higherIsBetter: true },
+  "richi_yifa.per":      { label: "일발율",           format: "percent", category: "리치 및 후로", higherIsBetter: true },
   "richi_chong.per":     { label: "리치 방총률",      format: "percent", category: "리치 및 후로", higherIsBetter: false },
   "richi_machi.per":     { label: "리치 다면율",      format: "percent", category: "리치 및 후로", higherIsBetter: true },
   "richi_first.per":     { label: "리치 선제율",      format: "percent", category: "리치 및 후로", higherIsBetter: true },
@@ -79,10 +73,8 @@ const display_keys = {
   "dora_inner_eff.max":  { label: "뒷도라 최대 변화점", format: "int",   category: "도라", higherIsBetter: null },
 };
 
-// 카테고리 목록 (탭 표시 순서)
 const CATEGORIES = [...new Set(Object.values(display_keys).map(v => v.category))];
 
-// 역 이름 번역
 const yaku_name_map = {
   "門前清自摸和": "멘젠쯔모", "立直": "리치", "一発": "일발",
   "槍槓": "창깡", "嶺上開花": "영상개화", "海底摸月": "해저로월",
@@ -104,8 +96,6 @@ const yaku_name_map = {
   "四暗刻単騎": "스안커 단기", "純正九蓮宝燈": "순정구련보등",
   "流し満貫": "유국 만관", "数え役満": "헤아림 역만",
 };
-
-// ── 공용 유틸 ──
 
 function getNestedValue(obj, path) {
   return path.split('.').reduce((o, k) => (o ? o[k] : undefined), obj);

@@ -1,35 +1,28 @@
 /**
- * ranking.js — 대시보드 (랭킹 + 날짜별 점수)
- * - 에러/빈 상태 처리
- * - URL 상태 관리 (뒤로가기 지원)
+ * ranking.js — 대시보드 (v3)
+ * 요약 카드 + 메타 분석 + 시즌 어워드 + 역만 타임라인 + 랭킹 + 날짜별 점수
  */
 document.addEventListener("DOMContentLoaded", () => {
   let currentSeason = window.config ? window.config.season : "all";
 
-  // URL에서 시즌 복원
   const urlSeason = new URLSearchParams(location.search).get("season");
-  if (urlSeason) {
-    currentSeason = urlSeason;
-    syncTabUI(currentSeason);
-  }
+  if (urlSeason) { currentSeason = urlSeason; syncTabUI(currentSeason); }
 
-  // ── 시즌 탭 ──
   document.querySelectorAll(".season-tabs .tab").forEach(tab => {
     tab.addEventListener("click", function () {
       document.querySelectorAll(".season-tabs .tab").forEach(t => t.classList.remove("active"));
       this.classList.add("active");
       currentSeason = this.dataset.season;
       pushState({ season: currentSeason });
-      loadRanking();
+      loadAll();
     });
   });
 
-  // 뒤로가기/앞으로가기
   window.addEventListener("popstate", (e) => {
     if (e.state && e.state.season) {
       currentSeason = e.state.season;
       syncTabUI(currentSeason);
-      loadRanking();
+      loadAll();
     }
   });
 
@@ -40,194 +33,208 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function pushState(state) {
-    const params = new URLSearchParams(location.search);
-    params.set("season", state.season);
-    history.pushState(state, "", `?${params}`);
+    const p = new URLSearchParams(location.search);
+    p.set("season", state.season);
+    history.pushState(state, "", `?${p}`);
   }
 
-  // ── 로딩/에러/빈 상태 ──
-  function showLoading() {
-    const el = document.getElementById("loading");
-    if (el) el.style.display = "flex";
-  }
-  function hideLoading() {
-    const el = document.getElementById("loading");
-    if (el) el.style.display = "none";
-  }
+  function showLoading() { const el = document.getElementById("loading"); if (el) el.style.display = "flex"; }
+  function hideLoading() { const el = document.getElementById("loading"); if (el) el.style.display = "none"; }
 
-  function showEmptyState(container, message) {
-    container.innerHTML = `<tr><td colspan="10" class="empty-state">${message}</td></tr>`;
-  }
-
-  function showErrorState(container, message) {
-    container.innerHTML = `<tr><td colspan="10" class="error-state">${message}</td></tr>`;
-  }
-
-  // ── 랭킹 로드 ──
-  async function loadRanking() {
+  async function loadAll() {
     showLoading();
-    const rankingBody = document.getElementById("rankingBody");
-    const dateScoreBody = document.getElementById("dateScoreBody");
-    const rankingInfo = document.getElementById("rankingInfo");
-
     try {
-      const res = await fetch("/ranking?season=" + currentSeason);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      const data = await res.json();
-
-      if (data.error) {
-        showEmptyState(rankingBody, "이 시즌의 대국 데이터가 없습니다.");
-        showEmptyState(dateScoreBody, "");
-        if (rankingInfo) rankingInfo.textContent = "";
-        return;
-      }
-
-      // 랭킹 테이블
-      if (rankingBody) {
-        rankingBody.innerHTML = "";
-        const filtered = data.ranking.filter(p => p.games > 0);
-
-        if (filtered.length === 0) {
-          showEmptyState(rankingBody, "이 시즌에 대국 기록이 있는 플레이어가 없습니다.");
-        } else {
-          // 최고치 계산
-          const maxSum = Math.max(...filtered.map(p => p.point_sum));
-          const maxAvg = Math.max(...filtered.map(p => p.point_avg));
-
-          filtered.forEach((player, i) => {
-            const row = document.createElement("tr");
-            const sumClass = player.point_sum === maxSum ? "val-best" : "";
-            const avgClass = player.point_avg === maxAvg ? "val-best" : "";
-            row.innerHTML = `
-              <td><a href="/stats_page/${encodeURIComponent(player.name)}?season=${currentSeason}" style="color:#1a1a2e;font-weight:700;text-decoration:none;">${player.name}</a></td>
-              <td>${player.games}</td>
-              <td class="${sumClass}">${player.point_sum.toFixed(1)}</td>
-              <td class="${avgClass}">${player.point_avg.toFixed(1)}</td>
-            `;
-            rankingBody.appendChild(row);
-          });
-
-          // 총 대국수
-          const totalGamesRaw = filtered.reduce((s, p) => s + p.games, 0);
-          const totalGames = Math.floor(totalGamesRaw / 4);
-          const regulatedGames = Math.floor(totalGames * 0.3);
-          if (rankingInfo) {
-            rankingInfo.textContent = `규정 대국 수 ${regulatedGames} / 총 대국 수 ${totalGames}`;
-          }
-        }
-      }
-
-      // 날짜별 점수
-      const headerElem = document.getElementById("dateScoreHeader");
-      if (headerElem) {
-        const headerRow = headerElem.querySelector("tr");
-        if (headerRow) {
-          headerRow.innerHTML = "<th>날짜</th>";
-          (data.players || []).forEach(name => {
-            const th = document.createElement("th");
-            th.textContent = name;
-            headerRow.appendChild(th);
-          });
-        }
-      }
-
-      if (dateScoreBody) {
-        dateScoreBody.innerHTML = "";
-        const daily = data.daily || [];
-        if (daily.length === 0) {
-          showEmptyState(dateScoreBody, "날짜별 점수 데이터가 없습니다.");
-        } else {
-          daily.forEach(entry => {
-            const row = document.createElement("tr");
-            const dateCell = document.createElement("td");
-            dateCell.textContent = entry.date.split("-")[0];
-
-            // 날짜 클릭 → 패보 재생 팝업
-            if (entry.ref) {
-              dateCell.style.cursor = "pointer";
-              dateCell.style.color = "#5b8def";
-              dateCell.style.textDecoration = "underline";
-              dateCell.style.textDecorationStyle = "dotted";
-              dateCell.addEventListener("click", (e) => {
-                e.stopPropagation();
-                showViewerPopup(e, entry.ref);
-              });
-            }
-
-            row.appendChild(dateCell);
-            (data.players || []).forEach(name => {
-              const td = document.createElement("td");
-              const val = entry.points[name];
-              if (val !== undefined) {
-                td.textContent = val.toFixed(1);
-                if (val > 0) td.className = "val-best";
-                else if (val < 0) td.className = "val-worst";
-              } else {
-                td.textContent = "-";
-                td.style.color = "#ccc";
-              }
-              row.appendChild(td);
-            });
-            dateScoreBody.appendChild(row);
-          });
-        }
-      }
-
-    } catch (error) {
-      console.error("Error loading ranking:", error);
-      if (rankingBody) showErrorState(rankingBody, "데이터를 불러오는 중 오류가 발생했습니다.");
-      if (dateScoreBody) dateScoreBody.innerHTML = "";
-      if (rankingInfo) rankingInfo.textContent = "";
+      await Promise.all([loadRanking(), loadMeta(), loadAwards(), loadYakumanHistory()]);
     } finally {
       hideLoading();
     }
   }
 
-  loadRanking();
+  // ── 랭킹 + 요약 카드 ──
+  async function loadRanking() {
+    const rankingBody = document.getElementById("rankingBody");
+    const dateScoreBody = document.getElementById("dateScoreBody");
+    const rankingInfo = document.getElementById("rankingInfo");
+    const summaryCards = document.getElementById("summaryCards");
 
-  // ── 패보 재생 팝업 ──
-  let activePopup = null;
-
-  function closePopup() {
-    if (activePopup) { activePopup.remove(); activePopup = null; }
-  }
-
-  document.addEventListener("click", closePopup);
-
-  async function showViewerPopup(e, ref) {
-    closePopup();
-
-    // 팝업 생성
-    const popup = document.createElement("div");
-    popup.className = "viewer-popup";
-    popup.innerHTML = `<div class="viewer-popup-title">패보 재생</div><div class="viewer-popup-loading">불러오는 중...</div>`;
-    
-    // 위치 계산
-    const rect = e.target.getBoundingClientRect();
-    popup.style.position = "fixed";
-    popup.style.left = Math.min(rect.left, window.innerWidth - 160) + "px";
-    popup.style.top = (rect.bottom + 4) + "px";
-
-    document.body.appendChild(popup);
-    activePopup = popup;
-
-    // API 호출
     try {
-      const res = await fetch(`/api/viewer/${encodeURIComponent(ref)}`);
+      const res = await fetch("/ranking?season=" + currentSeason);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
 
       if (data.error) {
-        popup.querySelector(".viewer-popup-loading").textContent = "패보를 찾을 수 없습니다.";
+        rankingBody.innerHTML = '<tr><td colspan="4" class="empty-state">이 시즌의 대국 데이터가 없습니다.</td></tr>';
+        dateScoreBody.innerHTML = "";
+        summaryCards.innerHTML = "";
+        rankingInfo.textContent = "";
         return;
       }
 
-      popup.innerHTML = `<div class="viewer-popup-title">패보 재생</div>` +
-        `<a href="${data.tenhou}" target="_blank" rel="noopener" class="viewer-popup-btn" onclick="event.stopPropagation()">천봉</a>` +
-        `<a href="${data.majsoul}" target="_blank" rel="noopener" class="viewer-popup-btn viewer-popup-btn-sub" onclick="event.stopPropagation()">작혼(일본) <span style="font-size:10px;color:#aaa;">로그인 필요</span></a>` +
-        `<a href="${data.majsoul_global}" target="_blank" rel="noopener" class="viewer-popup-btn viewer-popup-btn-sub" onclick="event.stopPropagation()">작혼(글로벌) <span style="font-size:10px;color:#aaa;">로그인 필요</span></a>`;
-    } catch (err) {
-      popup.querySelector(".viewer-popup-loading").textContent = "오류가 발생했습니다.";
+      // 요약 카드
+      const filtered = data.ranking.filter(p => p.games > 0);
+      const totalGames = filtered.reduce((s, p) => s + p.games, 0) / 4;
+      const topPlayer = filtered.length > 0 ? filtered.sort((a, b) => b.games - a.games)[0] : null;
+      const dates = (data.daily || []).map(d => d.date).filter(Boolean);
+      const latestDate = dates.length > 0 ? dates[0] : "-";
+
+      summaryCards.innerHTML = `
+        <div class="s-card"><div class="label">총 대국 수</div><div class="value">${Math.round(totalGames)}</div></div>
+        <div class="s-card"><div class="label">참가 인원</div><div class="value">${filtered.length}</div></div>
+        <div class="s-card"><div class="label">최근 대국</div><div class="value" style="font-size:15px;">${latestDate}</div></div>
+        <div class="s-card"><div class="label">최다 대국</div><div class="value" style="font-size:15px;">${topPlayer ? topPlayer.name : "-"}</div>
+          <div class="sub">${topPlayer ? topPlayer.games + "국" : ""}</div></div>
+      `;
+
+      // 랭킹 테이블
+      if (rankingBody) {
+        rankingBody.innerHTML = "";
+        const sorted = [...filtered].sort((a, b) => -a.games || -a.point_avg + b.point_avg);
+        if (sorted.length === 0) {
+          rankingBody.innerHTML = '<tr><td colspan="4" class="empty-state">대국 기록이 있는 플레이어가 없습니다.</td></tr>';
+          return;
+        }
+        sorted.forEach(p => {
+          const row = document.createElement("tr");
+          const pointColor = p.point_sum >= 0 ? "var(--color-best)" : "var(--color-worst)";
+          const avgColor = p.point_avg >= 0 ? "var(--color-best)" : "var(--color-worst)";
+          row.innerHTML = `<td><a href="/stats_page/${encodeURIComponent(p.name)}?season=${currentSeason}">${p.name}</a></td>
+            <td>${p.games}</td>
+            <td style="color:${pointColor};font-weight:600;">${p.point_sum >= 0 ? "+" : ""}${p.point_sum.toFixed(1)}</td>
+            <td style="color:${avgColor};font-weight:600;">${p.point_avg >= 0 ? "+" : ""}${p.point_avg.toFixed(2)}</td>`;
+          rankingBody.appendChild(row);
+        });
+        rankingInfo.textContent = `${filtered.length}명 / ${Math.round(totalGames)}국`;
+      }
+
+      // 날짜별 점수
+      if (dateScoreBody && data.daily) {
+        const header = document.getElementById("dateScoreHeader").querySelector("tr");
+        header.innerHTML = "<th>날짜</th>";
+        data.players.forEach(name => {
+          const th = document.createElement("th");
+          th.textContent = name;
+          header.appendChild(th);
+        });
+
+        dateScoreBody.innerHTML = "";
+        data.daily.forEach(d => {
+          const row = document.createElement("tr");
+          const tdDate = document.createElement("td");
+          tdDate.textContent = d.date;
+          tdDate.style.whiteSpace = "nowrap";
+          tdDate.style.cursor = "pointer";
+          tdDate.addEventListener("click", () => showViewerPopup(d.ref, tdDate));
+          row.appendChild(tdDate);
+
+          data.players.forEach(name => {
+            const td = document.createElement("td");
+            const val = d.points[name];
+            if (val !== undefined) {
+              td.textContent = (val >= 0 ? "+" : "") + val.toFixed(1);
+              td.style.color = val >= 0 ? "var(--color-best)" : "var(--color-worst)";
+              td.style.fontWeight = "600";
+            }
+            row.appendChild(td);
+          });
+          dateScoreBody.appendChild(row);
+        });
+      }
+    } catch (e) {
+      console.error(e);
+      rankingBody.innerHTML = '<tr><td colspan="4" class="error-state">데이터를 불러오는 중 오류가 발생했습니다.</td></tr>';
     }
   }
+
+  // ── 메타 분석 ──
+  async function loadMeta() {
+    try {
+      const res = await fetch(`/api/meta?season=${currentSeason}`);
+      const data = await res.json();
+      if (data.error) { document.getElementById("metaSection").style.display = "none"; return; }
+
+      document.getElementById("metaSection").style.display = "";
+      document.getElementById("metaRow").innerHTML = `
+        <div class="meta-item">평균 화료율 <strong>${data.avg_win_rate}%</strong></div>
+        <div class="meta-item">평균 방총률 <strong>${data.avg_chong_rate}%</strong></div>
+        <div class="meta-item">참가자 <strong>${data.total_players}명</strong></div>
+      `;
+
+      const yakuContainer = document.getElementById("topYakus");
+      if (data.top_yakus && data.top_yakus.length > 0) {
+        const yaku_kr = {"門前清自摸和":"멘젠쯔모","立直":"리치","一発":"일발","平和":"핑후","断幺九":"탕야오","一盃口":"이페코","役牌 白":"백","役牌 發":"발","役牌 中":"중","混一色":"혼이쯔","清一色":"친이쯔","七対子":"치또이","三色同順":"산쇼쿠","一気通貫":"잇키쯔칸","対々和":"또이또이","混全帯幺九":"혼찬타","自風 東":"자풍동","自風 南":"자풍남","場風 東":"장풍동","場風 南":"장풍남"};
+        yakuContainer.innerHTML = data.top_yakus.map(y =>
+          `<div class="yaku-chip">${yaku_kr[y.name] || y.name}<span class="cnt">${y.count}</span></div>`
+        ).join("");
+      }
+    } catch (e) {
+      console.error("Meta load error:", e);
+    }
+  }
+
+  // ── 시즌 어워드 ──
+  async function loadAwards() {
+    try {
+      const res = await fetch(`/api/awards?season=${currentSeason}`);
+      const data = await res.json();
+      if (!data.awards || data.awards.length === 0) {
+        document.getElementById("awardsSection").style.display = "none";
+        return;
+      }
+      document.getElementById("awardsSection").style.display = "";
+      document.getElementById("awardGrid").innerHTML = data.awards.map(a =>
+        `<div class="award-card"><div class="a-title">${a.title}</div><div class="a-winner">${a.winner}</div><div class="a-value">${a.value}</div></div>`
+      ).join("");
+    } catch (e) { console.error("Awards load error:", e); }
+  }
+
+  // ── 역만/삼배만 타임라인 ──
+  async function loadYakumanHistory() {
+    try {
+      const res = await fetch(`/api/yakuman_history?season=${currentSeason}`);
+      const data = await res.json();
+      if (!data.history || data.history.length === 0) {
+        document.getElementById("yakumanSection").style.display = "none";
+        return;
+      }
+      document.getElementById("yakumanSection").style.display = "";
+      document.getElementById("yakumanTimeline").innerHTML = data.history.map(h =>
+        `<div class="tl-item">
+          <span class="tl-date">${h.date}</span>
+          <span class="tl-badge ${h.tier === "역만" ? "tl-yakuman" : "tl-sanbaiman"}">${h.tier}</span>
+          <span style="font-weight:500;color:var(--text-primary);">${h.player}</span>
+        </div>`
+      ).join("");
+    } catch (e) { console.error("Yakuman history load error:", e); }
+  }
+
+  // ── 패보 팝업 (기존 유지) ──
+  function showViewerPopup(ref, anchor) {
+    document.querySelectorAll(".viewer-popup").forEach(p => p.remove());
+    if (!ref) return;
+    const popup = document.createElement("div");
+    popup.className = "viewer-popup";
+    popup.style.position = "absolute";
+    popup.innerHTML = '<div class="viewer-popup-loading">로딩...</div>';
+    const rect = anchor.getBoundingClientRect();
+    popup.style.left = (rect.left + window.scrollX) + "px";
+    popup.style.top = (rect.bottom + window.scrollY + 4) + "px";
+    document.body.appendChild(popup);
+
+    document.addEventListener("click", function handler(e) {
+      if (!popup.contains(e.target) && e.target !== anchor) {
+        popup.remove();
+        document.removeEventListener("click", handler);
+      }
+    });
+
+    fetch(`/api/viewer/${ref}`).then(r => r.json()).then(data => {
+      if (data.error) { popup.querySelector(".viewer-popup-loading").textContent = "오류"; return; }
+      popup.innerHTML = `<div class="viewer-popup-title">패보 재생</div>` +
+        `<a href="${data.tenhou}" target="_blank" rel="noopener" class="viewer-popup-btn" onclick="event.stopPropagation()">천봉</a>` +
+        `<a href="${data.majsoul}" target="_blank" rel="noopener" class="viewer-popup-btn viewer-popup-btn-sub" onclick="event.stopPropagation()">작혼(일본)</a>` +
+        `<a href="${data.majsoul_global}" target="_blank" rel="noopener" class="viewer-popup-btn viewer-popup-btn-sub" onclick="event.stopPropagation()">작혼(글로벌)</a>`;
+    }).catch(() => { popup.querySelector(".viewer-popup-loading").textContent = "오류"; });
+  }
+
+  loadAll();
 });
