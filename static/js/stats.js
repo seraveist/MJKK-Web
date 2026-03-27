@@ -1,8 +1,7 @@
 /**
- * stats.js — 개인 통계
- * - 카테고리 탭 필터링
- * - URL 상태 (season, player → 뒤로가기 지원)
- * - 에러/빈 상태 처리
+ * stats.js — 개인 통계 (v3)
+ * - 연승/연패 기록
+ * - 비교/상성 바로가기
  */
 document.addEventListener("DOMContentLoaded", () => {
   let currentPlayer = window.config.playerName || "";
@@ -12,13 +11,11 @@ document.addEventListener("DOMContentLoaded", () => {
   let rankChart = null;
   let cachedStats = null;
 
-  // URL에서 복원
   const params = new URLSearchParams(location.search);
   if (params.get("season")) currentSeason = params.get("season");
   if (params.get("player")) currentPlayer = params.get("player");
   syncTabUI(currentSeason);
 
-  // ── URL 상태 관리 ──
   function pushState() {
     const p = new URLSearchParams();
     p.set("season", currentSeason);
@@ -38,17 +35,28 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   function syncTabUI(season) {
-    document.querySelectorAll(".season-tabs .tab").forEach(t => {
-      t.classList.toggle("active", t.dataset.season === String(season));
+    // 멀티 시즌: "5,6" 또는 "all" 또는 "7"
+    const parts = season === "all" ? [] : String(season).split(",");
+    document.querySelectorAll(".season-chk").forEach(chk => {
+      if (season === "all") {
+        chk.checked = true;
+      } else {
+        chk.checked = parts.includes(chk.value);
+      }
     });
+    const allBtn = document.getElementById("btnAllSeason");
+    if (allBtn) {
+      const allBoxes = document.querySelectorAll(".season-chk");
+      const checked = document.querySelectorAll(".season-chk:checked");
+      allBtn.classList.toggle("active", checked.length === allBoxes.length);
+    }
   }
 
-  // ── 카테고리 탭 ──
+  // 카테고리 탭
   function buildCategoryTabs() {
     const container = document.getElementById("categoryTabs");
     if (!container) return;
     container.innerHTML = "";
-
     ["전체", ...CATEGORIES].forEach(cat => {
       const btn = document.createElement("button");
       btn.className = "cat-tab" + (cat === currentCategory ? " active" : "");
@@ -63,7 +71,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // ── 차트 ──
+  // 차트
   function drawChart(rankData) {
     const ctx = document.getElementById("rankChart").getContext("2d");
     const labels = rankData.map((_, i) => i + 1);
@@ -74,34 +82,17 @@ document.addEventListener("DOMContentLoaded", () => {
     } else {
       rankChart = new Chart(ctx, {
         type: "line",
-        data: {
-          labels,
-          datasets: [{
-            data: rankData,
-            borderColor: "#5b8def",
-            backgroundColor: "rgba(91,141,239,0.08)",
-            fill: true, tension: 0.3,
-            pointRadius: 3, pointBackgroundColor: "#5b8def",
-          }],
-        },
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          scales: {
-            x: { display: false },
-            y: { reverse: true, ticks: { stepSize: 1 }, suggestedMin: 1, suggestedMax: 4 },
-          },
-          plugins: { legend: { display: false } },
-        },
+        data: { labels, datasets: [{ data: rankData, borderColor: "#5b8def", backgroundColor: "rgba(91,141,239,0.08)", fill: true, tension: 0.3, pointRadius: 3, pointBackgroundColor: "#5b8def" }] },
+        options: { responsive: true, maintainAspectRatio: false, scales: { x: { display: false }, y: { reverse: true, ticks: { stepSize: 1 }, suggestedMin: 1, suggestedMax: 4 } }, plugins: { legend: { display: false } } },
       });
     }
   }
 
-  // ── 통계 테이블 (탭 필터) ──
+  // 테이블
   function renderTable(stats) {
     const tbody = document.querySelector("#statsTable tbody");
     tbody.innerHTML = "";
     enrichStats(stats);
-
     let hasData = false;
     for (const [key, { label, format, category }] of Object.entries(display_keys)) {
       if (currentCategory !== "전체" && category !== currentCategory) continue;
@@ -113,16 +104,16 @@ document.addEventListener("DOMContentLoaded", () => {
       tbody.appendChild(row);
     }
     if (!hasData) {
-      tbody.innerHTML = `<tr><td colspan="2" class="empty-state">표시할 통계가 없습니다.</td></tr>`;
+      tbody.innerHTML = '<tr><td colspan="2" class="empty-state">표시할 통계가 없습니다.</td></tr>';
     }
   }
 
-  // ── 역 달성 ──
+  // 역 달성
   function renderYakus(yakusArray) {
     const tbody = document.querySelector("#yakuTable tbody");
     tbody.innerHTML = "";
     if (!yakusArray || !Array.isArray(yakusArray)) {
-      tbody.innerHTML = `<tr><td colspan="2" class="empty-state">역 데이터가 없습니다.</td></tr>`;
+      tbody.innerHTML = '<tr><td colspan="2" class="empty-state">역 데이터가 없습니다.</td></tr>';
       return;
     }
     const yakusMap = Object.fromEntries(yakusArray.map(([c, n]) => [n.trim(), c]));
@@ -134,89 +125,123 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // ── 데이터 로드 ──
+  // [신규] 연승/연패 로드
+  async function loadStreaks(player) {
+    try {
+      const res = await fetch(`/api/streaks/${encodeURIComponent(player)}?season=${currentSeason}`);
+      const data = await res.json();
+      if (data.error || !data.total_games) {
+        document.getElementById("streakSection").style.display = "none";
+        return;
+      }
+      document.getElementById("streakSection").style.display = "";
+      document.getElementById("streakCards").innerHTML = `
+        <div class="streak-card"><div class="sk-label">최장 연속 1위</div><div class="sk-value">${data.max_first_streak}</div><div class="sk-sub">현재 ${data.current_first_streak}연속</div></div>
+        <div class="streak-card"><div class="sk-label">최장 연대 (1~2위)</div><div class="sk-value">${data.max_top2_streak}</div><div class="sk-sub">현재 ${data.current_top2_streak}연속</div></div>
+        <div class="streak-card"><div class="sk-label">최장 연속 4위</div><div class="sk-value">${data.max_last_streak}</div><div class="sk-sub">현재 ${data.current_last_streak}연속</div></div>
+      `;
+    } catch (e) { console.error(e); document.getElementById("streakSection").style.display = "none"; }
+  }
+
+  // [신규] 바로가기 링크 업데이트
+  function updateNavLinks(player) {
+    const nav = document.getElementById("navBtns");
+    if (!player) { nav.style.display = "none"; return; }
+    nav.style.display = "";
+    document.getElementById("linkCompare").href = `/compare?p1=${encodeURIComponent(player)}&season=${currentSeason}`;
+    document.getElementById("linkMatchup").href = `/matchup?p1=${encodeURIComponent(player)}&season=${currentSeason}`;
+    document.getElementById("linkSeasonCmp").href = `/trend?view=seasonCmp&player=${encodeURIComponent(player)}`;
+  }
+
+  // 로딩/에러
+  function showLoading() { document.getElementById("loading").style.display = "flex"; }
+  function hideLoading() { document.getElementById("loading").style.display = "none"; }
+  function showPageEmpty(msg) {
+    document.querySelector("#statsTable tbody").innerHTML = `<tr><td colspan="2" class="empty-state">${msg}</td></tr>`;
+    document.getElementById("streakSection").style.display = "none";
+  }
+  function showPageError(msg) {
+    document.querySelector("#statsTable tbody").innerHTML = `<tr><td colspan="2" class="error-state">${msg}</td></tr>`;
+  }
+
+  // 데이터 로드
   function loadStats(player) {
     showLoading();
     currentPlayer = player;
+    updateNavLinks(player);
+
     fetch(`/stats_api/${encodeURIComponent(currentPlayer)}?season=${currentSeason}&count=${currentCount}`)
-      .then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json();
-      })
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
       .then(data => {
-        if (data.error) {
-          showPageEmpty("이 시즌의 대국 데이터가 없습니다.");
-          return;
-        }
+        if (data.error) { showPageEmpty("이 시즌의 대국 데이터가 없습니다."); return; }
         const stats = data.stats || data.data;
         if (!stats) { showPageEmpty("통계를 계산할 수 없습니다."); return; }
         cachedStats = stats;
         renderTable(stats);
         renderYakus(stats.yakus);
         if (stats.rankData && stats.rankData.length > 0) drawChart(stats.rankData);
+        loadStreaks(player);
       })
-      .catch(e => {
-        console.error("Error:", e);
-        showPageError("데이터를 불러오는 중 오류가 발생했습니다.");
-      })
+      .catch(e => { console.error("Error:", e); showPageError("데이터를 불러오는 중 오류가 발생했습니다."); })
       .finally(() => hideLoading());
   }
 
-  function showPageEmpty(msg) {
-    const tbody = document.querySelector("#statsTable tbody");
-    if (tbody) tbody.innerHTML = `<tr><td colspan="2" class="empty-state">${msg}</td></tr>`;
-    const yakuTbody = document.querySelector("#yakuTable tbody");
-    if (yakuTbody) yakuTbody.innerHTML = "";
-  }
-
-  function showPageError(msg) {
-    const tbody = document.querySelector("#statsTable tbody");
-    if (tbody) tbody.innerHTML = `<tr><td colspan="2" class="error-state">${msg}</td></tr>`;
-  }
-
-  // ── 이벤트 ──
-  document.querySelectorAll(".graph-btn").forEach(btn => {
-    btn.addEventListener("click", function () {
-      currentCount = parseInt(this.dataset.count);
-      loadStats(currentPlayer);
-    });
-  });
-
-  document.querySelectorAll(".season-tabs .tab").forEach(tab => {
-    tab.addEventListener("click", function () {
-      document.querySelectorAll(".season-tabs .tab").forEach(t => t.classList.remove("active"));
-      this.classList.add("active");
-      currentSeason = this.dataset.season;
-      pushState();
-      loadStats(currentPlayer);
-    });
-  });
-
-  function showLoading() { const e = document.getElementById("loading"); if (e) e.style.display = "flex"; }
-  function hideLoading() { const e = document.getElementById("loading"); if (e) e.style.display = "none"; }
-
-  // ── 초기화 ──
+  // 초기화
   buildCategoryTabs();
 
-  const sel = document.getElementById("playerSelect");
-  if (sel) {
-    fetch("/stats/all").then(r => r.json()).then(data => {
-      data.allPlayers.forEach(p => {
-        const o = document.createElement("option");
-        o.value = p; o.textContent = p;
-        sel.appendChild(o);
-      });
-      if (data.allPlayers.length > 0) {
-        if (currentPlayer && data.allPlayers.includes(currentPlayer)) sel.value = currentPlayer;
-        else { sel.value = data.allPlayers[0]; currentPlayer = data.allPlayers[0]; }
+  fetch("/stats/all")
+    .then(r => r.json())
+    .then(data => {
+      const sel = document.getElementById("playerSelect");
+      const players = data.allPlayers || [];
+      players.forEach(p => { const o = document.createElement("option"); o.value = p; o.textContent = p; sel.appendChild(o); });
+      if (currentPlayer) sel.value = currentPlayer;
+      else if (players.length > 0) currentPlayer = players[0];
+
+      sel.addEventListener("change", () => {
+        currentPlayer = sel.value;
         pushState();
         loadStats(currentPlayer);
-      }
+      });
+
+      if (currentPlayer) loadStats(currentPlayer);
     });
-    sel.addEventListener("change", () => {
-      currentPlayer = sel.value;
-      pushState();
-      loadStats(currentPlayer);
-    });
+
+  // 시즌 체크박스 변경 시
+  function getSeasonParam() {
+    const allBoxes = document.querySelectorAll(".season-chk");
+    const checked = [...document.querySelectorAll(".season-chk:checked")].map(c => c.value);
+    if (checked.length === 0) return String(window.config.season);
+    if (checked.length === allBoxes.length) return "all";
+    if (checked.length === 1) return checked[0];
+    return checked.join(",");
   }
+
+  function onSeasonChange() {
+    currentSeason = getSeasonParam();
+    // "전체" 버튼 활성화 표시
+    const allBoxes = document.querySelectorAll(".season-chk");
+    const checked = document.querySelectorAll(".season-chk:checked");
+    document.getElementById("btnAllSeason").classList.toggle("active", checked.length === allBoxes.length);
+    pushState();
+    if (currentPlayer) loadStats(currentPlayer);
+  }
+
+  document.querySelectorAll(".season-chk").forEach(chk => {
+    chk.addEventListener("change", onSeasonChange);
+  });
+
+  // 국수 변경
+  document.getElementById("countSelect").addEventListener("change", function () {
+    currentCount = parseInt(this.value);
+    if (currentPlayer) loadStats(currentPlayer);
+  });
 });
+
+// 전역: "전체" 버튼 클릭 시 모든 체크박스 선택
+function selectAllSeasons() {
+  const boxes = document.querySelectorAll(".season-chk");
+  boxes.forEach(b => b.checked = true);
+  // 체크박스 change 이벤트 수동 트리거
+  if (boxes.length > 0) boxes[0].dispatchEvent(new Event("change"));
+}

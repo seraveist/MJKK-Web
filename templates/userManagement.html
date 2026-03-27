@@ -1,53 +1,58 @@
 {% extends "base.html" %}
 {% block content %}
-<div id="loading" class="loading-overlay" style="display: none;">
-  <div class="spinner"></div>
-</div>
-
 <div class="stats-container">
-  <h1>유저 관리</h1>
+  <h1>관리</h1>
 
-  <!-- 비밀번호 인증 -->
+  <!-- 인증 -->
   <div id="authSection">
     <div class="form-group">
-      <label for="adminPw">관리 비밀번호</label>
-      <input type="password" id="adminPw" class="form-input" style="max-width:300px;" placeholder="비밀번호 입력">
+      <label for="adminPw">관리자 비밀번호</label>
+      <input type="password" id="adminPw" class="form-input" style="max-width:300px;" placeholder="비밀번호 입력" onkeydown="if(event.key==='Enter')authenticate()">
     </div>
     <button class="btn-primary" onclick="authenticate()">인증</button>
     <p id="authMsg" style="margin-top:8px;"></p>
   </div>
 
-  <!-- 관리 패널 (인증 후 표시) -->
+  <!-- 관리 패널 -->
   <div id="adminPanel" style="display:none;">
-    <div class="separator"></div>
 
-    <h2>등록된 유저</h2>
-    <table id="userTable">
-      <thead>
-        <tr>
-          <th>이름</th>
-          <th>별명 (aliases)</th>
-          <th>작업</th>
-        </tr>
-      </thead>
+    <!-- 유저 관리 -->
+    <h2>유저 관리</h2>
+    <table>
+      <thead><tr><th>이름</th><th>별명 (aliases)</th><th>작업</th></tr></thead>
       <tbody id="userBody"></tbody>
     </table>
 
     <div class="separator"></div>
 
-    <h2>유저 추가 / 수정</h2>
+    <h2 id="formTitle">유저 추가</h2>
+    <input type="hidden" id="editingUser" value="">
     <div class="form-group">
-      <label for="userName">유저 이름</label>
-      <input type="text" id="userName" class="form-input" style="max-width:300px;" placeholder="표시 이름">
+      <label for="userName">이름</label>
+      <input type="text" id="userName" class="form-input" style="max-width:300px;">
     </div>
     <div class="form-group">
       <label for="userAliases">별명 (쉼표로 구분)</label>
-      <input type="text" id="userAliases" class="form-input" placeholder="작혼 닉네임1, 닉네임2, ...">
+      <input type="text" id="userAliases" class="form-input" style="max-width:400px;" placeholder="alias1, alias2">
     </div>
-    <input type="hidden" id="editingUser" value="">
     <button class="btn-primary" onclick="saveUser()">저장</button>
-    <button class="btn-secondary" onclick="clearForm()" style="margin-left:8px;padding:10px 20px;border:1px solid #ddd;border-radius:8px;background:#fff;cursor:pointer;font-family:inherit;">초기화</button>
+    <button style="padding:10px 16px;border:1px solid var(--border-input);background:var(--bg-input);border-radius:8px;cursor:pointer;font-size:14px;font-family:inherit;color:var(--text-secondary);margin-left:8px;" onclick="clearForm()">초기화</button>
     <p id="saveMsg" style="margin-top:8px;"></p>
+
+    <div class="separator"></div>
+
+    <!-- [신규] DB 백업 -->
+    <h2>데이터 백업</h2>
+    <div id="backupInfo" style="font-size:13px;color:var(--text-secondary);margin-bottom:12px;">로딩 중...</div>
+    <button class="btn-primary" onclick="downloadBackup()">JSON 백업 다운로드</button>
+    <p id="backupMsg" style="margin-top:8px;"></p>
+
+    <div class="separator"></div>
+
+    <!-- 사전계산 -->
+    <h2>사전계산</h2>
+    <button class="btn-primary" onclick="triggerPrecompute()">전체 시즌 재계산</button>
+    <p id="precomputeMsg" style="margin-top:8px;"></p>
   </div>
 </div>
 

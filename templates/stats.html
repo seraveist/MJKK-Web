@@ -1,60 +1,80 @@
 {% extends "base.html" %}
+{% block custom_css %}
+<style>
+  .nav-btns { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .nav-btns a { padding: 6px 14px; border: 1px solid var(--border-tab); border-radius: 6px; font-size: 12px; font-weight: 500; text-decoration: none; color: var(--text-link); transition: all 0.2s; }
+  .nav-btns a:hover { border-color: var(--color-accent); background: var(--bg-card-hover); }
+  .streak-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-bottom: 16px; }
+  .streak-card { background: var(--bg-table-header); border-radius: 8px; padding: 10px; text-align: center; }
+  .streak-card .sk-label { font-size: 11px; color: var(--text-tertiary); }
+  .streak-card .sk-value { font-size: 20px; font-weight: 700; color: var(--text-heading); }
+  .streak-card .sk-sub { font-size: 11px; color: var(--text-tertiary); }
+</style>
+{% endblock %}
 {% block content %}
-
-<div id="loading" class="loading-overlay" style="display: none;">
-  <div class="spinner"></div>
-</div>
+<div id="loading" class="loading-overlay" style="display: none;"><div class="spinner"></div></div>
 
 <div class="stats-container">
   <h1>개인 통계</h1>
 
-  <div class="season-tabs">
-    {% for s in available_seasons %}
-      <button class="tab {% if s|string == season|string %}active{% endif %}" data-season="{{ s }}">
-        시즌 {{ s }}
-      </button>
-    {% endfor %}
-    <button class="tab {% if season == 'all' %}active{% endif %}" data-season="all">전체</button>
+  <div style="margin-bottom:12px;">
+    <div style="font-size:13px;font-weight:500;color:var(--text-secondary);margin-bottom:6px;">시즌 선택 (복수 가능)</div>
+    <div class="season-tabs" id="seasonCheckArea">
+      {% for s in available_seasons %}
+        <label class="tab season-check-label" style="cursor:pointer;display:flex;align-items:center;gap:4px;">
+          <input type="checkbox" class="season-chk" value="{{ s }}" {% if s|string == season|string %}checked{% endif %}> 시즌 {{ s }}
+        </label>
+      {% endfor %}
+      <button class="tab" id="btnAllSeason" onclick="selectAllSeasons()">전체</button>
+    </div>
   </div>
 
   <div class="separator"></div>
 
-  <div class="form-group">
-    <label for="playerSelect">플레이어</label>
-    <select id="playerSelect" class="form-input" style="max-width:240px;"></select>
+  <div style="display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin-bottom:16px;">
+    <div class="form-group" style="flex:1;min-width:160px;margin-bottom:0;">
+      <label for="playerSelect">플레이어</label>
+      <select id="playerSelect" class="form-input"></select>
+    </div>
+  </div>
+
+  <!-- [신규] 바로가기 버튼 -->
+  <div class="nav-btns" id="navBtns" style="display:none;">
+    <a id="linkCompare" href="/compare">이 플레이어와 비교하기</a>
+    <a id="linkMatchup" href="/matchup">상성 보기</a>
+    <a id="linkSeasonCmp" href="/trend">시즌 비교</a>
   </div>
 
   <div class="separator"></div>
 
-  <h2>최근 순위</h2>
-  <div class="graph-container">
-    <canvas id="rankChart"></canvas>
-  </div>
-  <div class="graph-controls">
-    <button class="graph-btn" data-count="10">10국</button>
-    <button class="graph-btn" data-count="50">50국</button>
-    <button class="graph-btn" data-count="100">100국</button>
+  <!-- [신규] 연승/연패 -->
+  <div id="streakSection" style="display:none;">
+    <h2>연속 기록</h2>
+    <div class="streak-cards" id="streakCards"></div>
+    <div class="separator"></div>
   </div>
 
-  <div class="separator"></div>
-
-  <h2>시즌 통계</h2>
   <!-- 카테고리 탭 -->
   <div class="category-tabs" id="categoryTabs"></div>
+
+  <!-- 통계 테이블 -->
   <table id="statsTable">
-    <thead>
-      <tr><th>항목</th><th>값</th></tr>
-    </thead>
+    <thead><tr><th>항목</th><th>값</th></tr></thead>
     <tbody></tbody>
   </table>
 
   <div class="separator"></div>
 
-  <h2>역 달성 내역</h2>
+  <h2>순위 차트 (최근 <select id="countSelect" style="padding:2px 6px;font-size:13px;border:1px solid var(--border-input);border-radius:4px;font-family:inherit;background:var(--bg-input);color:var(--text-primary);">
+    <option value="10">10</option><option value="20">20</option><option value="50">50</option><option value="100">100</option>
+  </select> 국)</h2>
+  <div class="graph-container"><canvas id="rankChart"></canvas></div>
+
+  <div class="separator"></div>
+
+  <h2>역 달성</h2>
   <table id="yakuTable">
-    <thead>
-      <tr><th>역 종류</th><th>달성 횟수</th></tr>
-    </thead>
+    <thead><tr><th>역</th><th>횟수</th></tr></thead>
     <tbody></tbody>
   </table>
 </div>
@@ -62,7 +82,7 @@
 <script>
   window.config = {
     season: "{{ season }}",
-    playerName: "{{ player_name|default('') }}"
+    playerName: "{{ player_name|default('', true) }}",
   };
 </script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>

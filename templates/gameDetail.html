@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block custom_css %}
+<style>
+  .player-card {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    background: var(--bg-table-header);
+    font-weight: 500;
+  }
+  .player-card .rank { font-size: 18px; font-weight: 700; }
+  .player-card .rank-1 { color: #f59e0b; }
+  .player-card .rank-2 { color: var(--text-secondary); }
+  .player-card .rank-3 { color: #a16207; }
+  .player-card .rank-4 { color: var(--color-worst); }
+  .round-row {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border-light);
+    font-size: 13px;
+  }
+  .round-label {
+    min-width: 100px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+  }
+  .round-scores {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .round-score {
+    min-width: 80px;
+    text-align: center;
+  }
+  .result-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .result-tsumo { background: #dbeafe; color: #1d4ed8; }
+  .result-ron { background: #fef3c7; color: #92400e; }
+  .result-draw { background: var(--bg-table-header); color: var(--text-tertiary); }
+  .result-win { background: #dcfce7; color: #166534; }
+  [data-theme="dark"] .result-tsumo { background: #1e3a5f; color: #93c5fd; }
+  [data-theme="dark"] .result-ron { background: #451a03; color: #fcd34d; }
+  [data-theme="dark"] .result-win { background: #14532d; color: #86efac; }
+  .viewer-links { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+  .viewer-links a {
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    border: 1px solid var(--border-input);
+    color: var(--text-link);
+    transition: all 0.2s;
+  }
+  .viewer-links a:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--color-accent);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div id="loading" class="loading-overlay" style="display: none;">
+  <div class="spinner"></div>
+</div>
+
+<div class="stats-container">
+  <div style="margin-bottom:12px;">
+    <a href="/games" style="font-size:13px;color:var(--text-link);text-decoration:none;">← 대국 기록으로 돌아가기</a>
+  </div>
+
+  <h1 id="detailTitle">대국 상세</h1>
+
+  <!-- 최종 결과 -->
+  <div id="finalResult" style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-bottom:20px;"></div>
+
+  <!-- 패보 링크 -->
+  <div id="viewerLinks" class="viewer-links" style="justify-content:center;margin-bottom:20px;"></div>
+
+  <div class="separator"></div>
+
+  <!-- 점수 흐름 차트 -->
+  <h2>점수 흐름</h2>
+  <div class="graph-container" style="height:280px;">
+    <canvas id="scoreFlowChart"></canvas>
+  </div>
+
+  <div class="separator"></div>
+
+  <!-- 국별 상세 -->
+  <h2>국별 결과</h2>
+  <div id="roundsList"></div>
+
+  <div id="detailEmpty" class="empty-state" style="display:none;">데이터를 불러올 수 없습니다.</div>
+</div>
+
+<script>
+  window.config = { ref: "{{ ref }}" };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="{{ url_for('static', filename='js/gameDetail.js') }}"></script>
+{% endblock %}
