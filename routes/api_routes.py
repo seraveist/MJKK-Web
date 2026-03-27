@@ -274,40 +274,45 @@ def get_game_logs():
 
 def _detect_big_hands(game_log):
     """대국에서 배만/삼배만/역만 감지. { playerName: "역만"|"삼배만"|"배만" }"""
+    log_data = game_log.get("log", [])
     names = game_log.get("name", [])
     results = {}
 
-    try:
-        parsed = tenhouLog.game(game_log)
-        for rnd in parsed.logs:
-            if rnd.isDraw:
-                continue
-            for sc_arr in rnd.changeScore:
-                for seat in range(len(names)):
-                    if seat >= len(sc_arr):
-                        continue
-                    score = sc_arr[seat]
-                    if score <= 0:
-                        continue
+    for round_data in (log_data or []):
+        if not round_data or len(round_data) < 16:
+            continue
+        result_block = round_data[16] if len(round_data) > 16 else None
+        if not result_block:
+            continue
 
-                    matched = find_user_by_alias(USERS, names[seat])
-                    display_name = matched["name"] if matched else names[seat]
+        if isinstance(result_block, list):
+            for entry in result_block[2::2] if len(result_block) > 2 else []:
+                if not isinstance(entry, list) or len(entry) < 3:
+                    continue
+                seat = entry[0] if isinstance(entry[0], int) else -1
+                score = entry[2] if len(entry) > 2 and isinstance(entry[2], (int, float)) else 0
 
-                    tier = None
-                    if score >= 32000:
-                        tier = "역만"
-                    elif score >= 24000:
-                        tier = "삼배만"
-                    elif score >= 16000:
-                        tier = "배만"
+                if seat < 0 or seat >= len(names):
+                    continue
 
-                    if tier:
-                        tier_rank = {"배만": 1, "삼배만": 2, "역만": 3}
-                        existing = results.get(display_name)
-                        if not existing or tier_rank.get(tier, 0) > tier_rank.get(existing, 0):
-                            results[display_name] = tier
-    except Exception as e:
-        logger.warning("Big hand detection failed: %s", e)
+                name = names[seat]
+                matched = find_user_by_alias(USERS, name)
+                display_name = matched["name"] if matched else name
+
+                tier = None
+                abs_score = abs(score)
+                if abs_score >= 32000:
+                    tier = "역만"
+                elif abs_score >= 24000:
+                    tier = "삼배만"
+                elif abs_score >= 16000:
+                    tier = "배만"
+
+                if tier:
+                    existing = results.get(display_name)
+                    tier_rank = {"배만": 1, "삼배만": 2, "역만": 3}
+                    if not existing or tier_rank.get(tier, 0) > tier_rank.get(existing, 0):
+                        results[display_name] = tier
 
     return results
 
@@ -326,76 +331,63 @@ def get_game_detail(ref):
 
         names = game_log.get("name", [])
         sc = game_log.get("sc", [])
+        log_data = game_log.get("log", [])
         title = game_log.get("title", ["", ""])
         date = title[1] if len(title) > 1 else ""
-        player_count = len(names)
 
         final_players = []
-        for i in range(min(4, player_count)):
+        for i in range(min(4, len(names))):
             score = sc[i * 2] if i * 2 < len(sc) else 0
             point = sc[i * 2 + 1] if i * 2 + 1 < len(sc) else 0
             final_players.append({"name": names[i], "score": score, "point": point, "seat": i})
 
-        # tenhouLog 파서로 정확한 국별 데이터 추출
-        parsed = tenhouLog.game(game_log)
         rounds = []
-        cumulative_scores = [0] * player_count
-
-        for rnd in parsed.logs:
-            # 라운드 이름
-            wind_idx = rnd.gameWindIndex
+        cumulative_scores = [0, 0, 0, 0]
+        for round_data in (log_data or []):
+            if not round_data or len(round_data) < 16:
+                continue
+            round_info = round_data[0] if round_data[0] else []
+            round_num = round_info[0] if len(round_info) > 0 else 0
+            honba = round_info[1] if len(round_info) > 1 else 0
             wind_names = ["동", "남", "서", "북"]
-            wind = wind_names[wind_idx // 4] if wind_idx // 4 < 4 else "?"
-            kyoku = (wind_idx % 4) + 1
-            honba = rnd.logObj[0][1] if len(rnd.logObj[0]) > 1 else 0
+            wind = wind_names[round_num // 4] if round_num // 4 < 4 else "?"
+            kyoku = (round_num % 4) + 1
             round_label = f"{wind}{kyoku}국"
             if honba > 0:
                 round_label += f" {honba}본장"
 
-            # 시작 점수
-            start_scores = list(rnd.startScore) if rnd.startScore else [0] * player_count
+            start_scores = [round_info[4 + i] if 4 + i < len(round_info) else 0 for i in range(4)]
 
-            # 점수 변동 합산 (더블론 등 복수 결과 처리)
-            score_changes = [0] * player_count
-            for sc_arr in rnd.changeScore:
-                for i in range(min(player_count, len(sc_arr))):
-                    score_changes[i] += sc_arr[i]
-
-            # 결과 타입 판정
-            result_type = "draw"
+            result_type = "unknown"
+            score_changes = [0, 0, 0, 0]
             winner = -1
-            if not rnd.isDraw:
-                if rnd.isSomeoneZimo():
-                    result_type = "tsumo"
-                    for i in range(player_count):
-                        if rnd.changeScore[0][i] > 0:
-                            winner = i
-                            break
-                else:
-                    result_type = "ron"
-                    # 가장 많이 얻은 사람이 winner
-                    max_gain = 0
-                    for i in range(player_count):
-                        total_gain = sum(sc[i] for sc in rnd.changeScore if i < len(sc))
-                        if total_gain > max_gain:
-                            max_gain = total_gain
-                            winner = i
+            hule_result = round_data[16] if len(round_data) > 16 else None
+            if hule_result and isinstance(hule_result, list) and len(hule_result) >= 2:
+                result_arr = hule_result[0] if isinstance(hule_result[0], list) else hule_result
+                if isinstance(result_arr, list):
+                    for i in range(min(4, len(result_arr))):
+                        if isinstance(result_arr[i], (int, float)):
+                            score_changes[i] = result_arr[i]
 
-            for i in range(player_count):
+                if any(s > 0 for s in score_changes):
+                    winner_idx = score_changes.index(max(score_changes))
+                    negative_count = sum(1 for s in score_changes if s < 0)
+                    result_type = "tsumo" if negative_count == 3 else "ron" if negative_count == 1 else "win"
+                    winner = winner_idx
+                else:
+                    result_type = "draw"
+
+            for i in range(4):
                 cumulative_scores[i] += score_changes[i]
 
             rounds.append({
-                "label": round_label,
-                "startScores": start_scores,
-                "scoreChanges": score_changes,
-                "cumulativeChanges": list(cumulative_scores),
-                "resultType": result_type,
-                "winner": winner,
+                "label": round_label, "startScores": start_scores,
+                "scoreChanges": score_changes, "cumulativeChanges": list(cumulative_scores),
+                "resultType": result_type, "winner": winner,
             })
 
         return jsonify({
-            "ref": ref, "date": date, "players": final_players,
-            "names": names, "rounds": rounds,
+            "ref": ref, "date": date, "players": final_players, "names": names, "rounds": rounds,
             "viewer_url": _build_tenhou_url(game_log),
             "majsoul_url": _build_majsoul_url(game_log),
             "majsoul_global_url": _build_majsoul_global_url(game_log),
@@ -553,8 +545,6 @@ def get_meta():
         total_players = 0
         total_win_rate = 0
         total_chong_rate = 0
-        total_richi_rate = 0
-        total_fulu_rate = 0
         yakus_merged = {}
 
         for name, ps in stats.items():
@@ -565,8 +555,6 @@ def get_meta():
             total_games += g
             total_win_rate += (ps.get("winGame", {}).get("avg", 0) or 0)
             total_chong_rate += (ps.get("chong", {}).get("avg", 0) or 0)
-            total_richi_rate += (ps.get("richi", {}).get("avg", 0) or 0)
-            total_fulu_rate += (ps.get("fulu", {}).get("avg", 0) or 0)
 
             for yaku_entry in (ps.get("yakus") or []):
                 if isinstance(yaku_entry, list) and len(yaku_entry) == 2:
@@ -575,10 +563,8 @@ def get_meta():
 
         avg_win = round(total_win_rate / total_players * 100, 1) if total_players else 0
         avg_chong = round(total_chong_rate / total_players * 100, 1) if total_players else 0
-        avg_richi = round(total_richi_rate / total_players * 100, 1) if total_players else 0
-        avg_fulu = round(total_fulu_rate / total_players * 100, 1) if total_players else 0
 
-        top_yakus = sorted(yakus_merged.items(), key=lambda x: -x[1])[:20]
+        top_yakus = sorted(yakus_merged.items(), key=lambda x: -x[1])[:10]
 
         return jsonify({
             "season": season_param,
@@ -586,8 +572,6 @@ def get_meta():
             "total_players": total_players,
             "avg_win_rate": avg_win,
             "avg_chong_rate": avg_chong,
-            "avg_richi_rate": avg_richi,
-            "avg_fulu_rate": avg_fulu,
             "top_yakus": [{"name": y, "count": c} for y, c in top_yakus],
         })
     except Exception as e:

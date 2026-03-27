@@ -70,28 +70,25 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
-      // 요약 카드 (가로 한줄)
+      // 요약 카드
       const filtered = data.ranking.filter(p => p.games > 0);
       const totalGames = filtered.reduce((s, p) => s + p.games, 0) / 4;
-      const topPlayer = filtered.length > 0 ? [...filtered].sort((a, b) => b.games - a.games)[0] : null;
+      const topPlayer = filtered.length > 0 ? filtered.sort((a, b) => b.games - a.games)[0] : null;
       const dates = (data.daily || []).map(d => d.date).filter(Boolean);
       const latestDate = dates.length > 0 ? dates[0] : "-";
 
       summaryCards.innerHTML = `
-        <div class="s-card"><span class="label">총 대국</span><span class="value">${Math.round(totalGames)}</span></div>
-        <div class="s-card"><span class="label">참가</span><span class="value">${filtered.length}명</span></div>
-        <div class="s-card"><span class="label">최근</span><span class="value">${latestDate}</span></div>
-        <div class="s-card"><span class="label">최다</span><span class="value">${topPlayer ? topPlayer.name : "-"}</span></div>
+        <div class="s-card"><div class="label">총 대국 수</div><div class="value">${Math.round(totalGames)}</div></div>
+        <div class="s-card"><div class="label">참가 인원</div><div class="value">${filtered.length}</div></div>
+        <div class="s-card"><div class="label">최근 대국</div><div class="value" style="font-size:15px;">${latestDate}</div></div>
+        <div class="s-card"><div class="label">최다 대국</div><div class="value" style="font-size:15px;">${topPlayer ? topPlayer.name : "-"}</div>
+          <div class="sub">${topPlayer ? topPlayer.games + "국" : ""}</div></div>
       `;
 
-      // 랭킹 테이블 (#6: 대국수 → 우마평균 → 우마합산 순)
+      // 랭킹 테이블
       if (rankingBody) {
         rankingBody.innerHTML = "";
-        const sorted = [...filtered].sort((a, b) => {
-          if (b.games !== a.games) return b.games - a.games;
-          if (b.point_avg !== a.point_avg) return b.point_avg - a.point_avg;
-          return b.point_sum - a.point_sum;
-        });
+        const sorted = [...filtered].sort((a, b) => -a.games || -a.point_avg + b.point_avg);
         if (sorted.length === 0) {
           rankingBody.innerHTML = '<tr><td colspan="4" class="empty-state">대국 기록이 있는 플레이어가 없습니다.</td></tr>';
           return;
@@ -149,9 +146,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // ── 메타 분석 ──
-  const YAKU_EXCLUDE = new Set(["役牌 白","役牌 發","役牌 中","自風 東","自風 南","自風 西","自風 北","場風 東","場風 南","場風 西","場風 北"]);
-  const YAKU_KR = {"門前清自摸和":"멘젠쯔모","立直":"리치","一発":"일발","平和":"핑후","断幺九":"탕야오","一盃口":"이페코","混一色":"혼일색","清一色":"청일색","七対子":"치또이","三色同順":"삼색동순","一気通貫":"일기통관","対々和":"또이또이","混全帯幺九":"찬타","三色同刻":"삼색동각","混老頭":"혼노두","三暗刻":"산안커","小三元":"소삼원","二盃口":"량페코","純全帯幺九":"준찬타","嶺上開花":"영상개화","海底摸月":"해저로월","河底撈魚":"하저로어","槍槓":"창깡"};
-
   async function loadMeta() {
     try {
       const res = await fetch(`/api/meta?season=${currentSeason}`);
@@ -162,16 +156,14 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("metaRow").innerHTML = `
         <div class="meta-item">평균 화료율 <strong>${data.avg_win_rate}%</strong></div>
         <div class="meta-item">평균 방총률 <strong>${data.avg_chong_rate}%</strong></div>
-        <div class="meta-item">평균 리치율 <strong>${data.avg_richi_rate || "-"}%</strong></div>
-        <div class="meta-item">평균 후로율 <strong>${data.avg_fulu_rate || "-"}%</strong></div>
         <div class="meta-item">참가자 <strong>${data.total_players}명</strong></div>
       `;
 
       const yakuContainer = document.getElementById("topYakus");
       if (data.top_yakus && data.top_yakus.length > 0) {
-        const filtered = data.top_yakus.filter(y => !YAKU_EXCLUDE.has(y.name));
-        yakuContainer.innerHTML = filtered.slice(0, 10).map(y =>
-          `<div class="yaku-chip">${YAKU_KR[y.name] || y.name}<span class="cnt">${y.count}</span></div>`
+        const yaku_kr = {"門前清自摸和":"멘젠쯔모","立直":"리치","一発":"일발","平和":"핑후","断幺九":"탕야오","一盃口":"이페코","役牌 白":"백","役牌 發":"발","役牌 中":"중","混一色":"혼이쯔","清一色":"친이쯔","七対子":"치또이","三色同順":"산쇼쿠","一気通貫":"잇키쯔칸","対々和":"또이또이","混全帯幺九":"혼찬타","自風 東":"자풍동","自風 南":"자풍남","場風 東":"장풍동","場風 南":"장풍남"};
+        yakuContainer.innerHTML = data.top_yakus.map(y =>
+          `<div class="yaku-chip">${yaku_kr[y.name] || y.name}<span class="cnt">${y.count}</span></div>`
         ).join("");
       }
     } catch (e) {
