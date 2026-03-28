@@ -821,15 +821,34 @@ def get_profile(player_name):
         if not player_stats or player_stats.get("games", 0) == 0:
             return jsonify({"error": "No data"}), 404
 
-        # 리그 평균 + 표준편차 계산
+        # ── 6축 정의 ──
         axes_keys = {
             "attack": ("winGame", "avg"),
             "defense": ("chong", "avg"),
+            "speed": ("winGame_round", "avg"),
+            "score": ("winGame_score", "avg"),
             "richi": ("richi", "avg"),
             "fulu": ("fulu", "avg"),
-            "score": ("winGame_score", "avg"),
         }
+
+        # 리그 평균 + 표준편차 계산 (최소 5국 이상)
         league_vals = {k: [] for k in axes_keys}
+        # 보너스용 리그 데이터
+        bonus_keys = {
+            "dama": lambda ps: (ps.get("winGame_dama") or {}).get("per", 0),
+            "ippatsu": lambda ps: (ps.get("richi_yifa") or {}).get("per", 0),
+            "tsumo": lambda ps: (ps.get("winGame_zimo") or {}).get("per", 0),
+            "oya": lambda ps: (ps.get("winGame_host") or {}).get("per", 0),
+            "dora_avg": lambda ps: (ps.get("dora") or {}).get("avg", 0),
+            "rentai": lambda ps: _calc_rentai(ps),
+            "fourth": lambda ps: _calc_fourth(ps),
+            "ron": lambda ps: (ps.get("winGame_rong") or {}).get("per", 0),
+            "tobi_maker": lambda ps: (ps.get("minusOther") or {}).get("avg", 0),
+            "kuksuji": lambda ps: ps.get("kuksuji", 0),
+            "tamen": lambda ps: (ps.get("richi_machi") or {}).get("per", 0),
+        }
+        league_bonus = {k: [] for k in bonus_keys}
+
         for name, ps in stats.items():
             if ps.get("games", 0) < 5:
                 continue
@@ -837,7 +856,15 @@ def get_profile(player_name):
                 v = (ps.get(k1) or {}).get(k2)
                 if v is not None and isinstance(v, (int, float)):
                     league_vals[ak].append(v)
+            for bk, fn in bonus_keys.items():
+                try:
+                    v = fn(ps)
+                    if v is not None and isinstance(v, (int, float)):
+                        league_bonus[bk].append(v)
+                except Exception:
+                    pass
 
+        # ── 6축 Z-score + 레이더 점수 ──
         profile = {}
         for ak, (k1, k2) in axes_keys.items():
             vals = league_vals[ak]
@@ -845,44 +872,113 @@ def get_profile(player_name):
             std = stat_mod.stdev(vals) if len(vals) >= 2 else 1
             raw = (player_stats.get(k1) or {}).get(k2, 0) or 0
             z = (raw - avg) / std if std > 0 else 0
-            if ak == "defense":
-                z = -z  # 방총률은 낮을수록 좋음
-            score = max(0, min(100, 50 + z * 20))
-            profile[ak] = {"raw": round(raw, 4), "avg": round(avg, 4), "std": round(std, 4), "z": round(z, 2), "score": round(score, 1)}
+            # 방총률/화료순목: 낮을수록 좋음 → 반전
+            if ak in ("defense", "speed"):
+                z = -z
+            chart_score = max(0, min(100, 50 + z * 20))
+            profile[ak] = {"raw": round(raw, 4), "z": round(z, 2), "score": round(chart_score, 1)}
 
-        # 스타일 분류 — 가장 두드러진 축 기반 상대 분류
-        a, d, r, f, sc = profile["attack"]["score"], profile["defense"]["score"], profile["richi"]["score"], profile["fulu"]["score"], profile["score"]["score"]
-
-        # 50(리그 평균)에서 가장 많이 벗어난 축 찾기
-        deviations = {
-            "공격형": a - 50,
-            "수비형": d - 50,
-            "멘젠형": r - 50,
-            "후로형": f - 50,
-            "타점형": sc - 50,
+        # ── 6축 태그 판정 ──
+        TAG_DEFS = {
+            "attack": [
+                (-999, -1.2, "소극", "red", "화료율 매우 낮음"),
+                (-1.2, -0.5, "신중", "green", "화료율 낮음"),
+                (0.5, 1.2, "공격", "blue", "화료율 높음"),
+                (1.2, 999, "돌격", "gold", "화료율 매우 높음"),
+            ],
+            "defense": [
+                (-999, -1.2, "노가드", "red", "방총률 매우 높음"),
+                (-1.2, -0.5, "과감", "green", "방총률 높음"),
+                (0.5, 1.2, "방어", "blue", "방총률 낮음"),
+                (1.2, 999, "철벽", "gold", "방총률 매우 낮음"),
+            ],
+            "speed": [
+                (-999, -1.2, "집념", "green", "화료순 매우 늦음"),
+                (-1.2, -0.5, "끈기", "green", "화료순 늦음"),
+                (0.5, 1.2, "속공", "blue", "화료순 빠름"),
+                (1.2, 999, "전광석화", "gold", "화료순 매우 빠름"),
+            ],
+            "score": [
+                (-999, -1.2, "잽", "red", "타점 매우 낮음"),
+                (-1.2, -0.5, "훅", "green", "타점 낮음"),
+                (0.5, 1.2, "스트레이트", "blue", "타점 높음"),
+                (1.2, 999, "K.O", "gold", "타점 매우 높음"),
+            ],
+            "richi": [
+                (0.5, 1.2, "리치", "green", "리치율 높음"),
+                (1.2, 999, "리치광", "blue", "리치율 매우 높음"),
+            ],
+            "fulu": [
+                (0.5, 1.2, "후로", "green", "후로율 높음"),
+                (1.2, 999, "후로광", "blue", "후로율 매우 높음"),
+            ],
         }
 
-        # 복합 판정: 공격+타점 높으면 공격형, 수비+멘젠 높으면 수비형
-        composite = {
-            "공격형": (a + sc) / 2 - 50,
-            "수비형": (d + (100 - a)) / 2 - 50,
-            "멘젠형": (r + (100 - f)) / 2 - 50,
-            "후로형": (f + (100 - r)) / 2 - 50,
-        }
+        tags = []
+        for ak, defs in TAG_DEFS.items():
+            z = profile[ak]["z"]
+            for lo, hi, name, color, tooltip in defs:
+                if lo <= z < hi or (hi == 999 and z >= lo):
+                    tags.append({"name": name, "color": color, "tooltip": tooltip, "axis": ak})
+                    break
 
-        best_style = max(composite, key=composite.get)
-        best_deviation = composite[best_style]
+        # ── 보너스 태그 판정 ──
+        BONUS_DEFS = [
+            ("dama", 0.8, True, "다마", "green", "다마 화료율 상위"),
+            ("ippatsu", 0.8, True, "일발", "blue", "일발율 상위"),
+            ("tsumo", 0.8, True, "쯔모", "blue", "쯔모율 상위"),
+            ("oya", 0.8, True, "오야", "blue", "오야 화료율 상위"),
+            ("dora_avg", 0.8, True, "도라 수집가", "blue", "평균 도라 수 상위"),
+            ("rentai", 0.8, True, "연대", "gold", "1위율+2위율 상위"),
+            ("fourth", -0.8, False, "4위회피", "gold", "4위율 하위"),
+            ("ron", 0.8, True, "론 사냥꾼", "green", "론 화료율 상위"),
+            ("tobi_maker", 0.8, True, "토비 메이커", "green", "상대 토비율 상위"),
+            ("kuksuji", 0.8, True, "국수지", "gold", "국수지 상위"),
+            ("tamen", 0.8, True, "다면 설계사", "blue", "리치 다면율 상위"),
+            ("tamen", -0.8, False, "우형 매니아", "green", "리치 다면율 하위"),
+        ]
 
-        # 편차가 너무 작으면 밸런스형 (리그 평균에서 3점 이내)
-        if best_deviation < 3:
-            style = "밸런스형"
-        else:
-            style = best_style
+        for bk, threshold, is_upper, name, color, tooltip in BONUS_DEFS:
+            vals = league_bonus.get(bk, [])
+            if len(vals) < 2:
+                continue
+            avg = sum(vals) / len(vals)
+            std = stat_mod.stdev(vals)
+            if std == 0:
+                continue
+            try:
+                fn = bonus_keys[bk]
+                raw = fn(player_stats)
+            except Exception:
+                continue
+            if raw is None:
+                continue
+            z = (raw - avg) / std
+            if is_upper and z > threshold:
+                tags.append({"name": name, "color": color, "tooltip": tooltip, "axis": "bonus"})
+            elif not is_upper and z < threshold:
+                tags.append({"name": name, "color": color, "tooltip": tooltip, "axis": "bonus"})
 
-        return jsonify({"player": player_name, "profile": profile, "style": style})
+        return jsonify({"player": player_name, "profile": profile, "tags": tags})
     except Exception as e:
         logger.error("Error computing profile for %s", player_name, exc_info=e)
         return jsonify({"error": "Failed to compute profile"}), 500
+
+
+def _calc_rentai(ps):
+    """1위+2위 비율"""
+    total = ps.get("games", 0)
+    if total == 0:
+        return 0
+    return (ps.get("total_first_count", 0) + ps.get("total_second_count", 0)) / total
+
+
+def _calc_fourth(ps):
+    """4위 비율"""
+    total = ps.get("games", 0)
+    if total == 0:
+        return 0
+    return ps.get("total_fourth_count", 0) / total
 
 
 # ==================================================================

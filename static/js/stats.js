@@ -139,6 +139,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // [신규] 플레이 스타일 프로파일
   let radarChart = null;
+  const TAG_COLOR_MAP = { gold: "ptag-gold", blue: "ptag-blue", green: "ptag-green", red: "ptag-red" };
+
   async function loadProfile(player) {
     try {
       const res = await fetch(`/api/profile/${encodeURIComponent(player)}?season=${currentSeason}`);
@@ -146,10 +148,24 @@ document.addEventListener("DOMContentLoaded", () => {
       if (data.error) { document.getElementById("profileSection").style.display = "none"; return; }
 
       document.getElementById("profileSection").style.display = "";
-      document.getElementById("profileStyle").textContent = data.style;
 
-      const labels = ["공격력", "수비력", "리치", "후로", "타점"];
-      const scores = [data.profile.attack.score, data.profile.defense.score, data.profile.richi.score, data.profile.fulu.score, data.profile.score.score];
+      // 태그 렌더링
+      const tagsEl = document.getElementById("profileTags");
+      if (data.tags && data.tags.length > 0) {
+        tagsEl.innerHTML = data.tags.map(t =>
+          `<span class="ptag ${TAG_COLOR_MAP[t.color] || 'ptag-green'}">${t.name}<span class="ptag-tooltip">${t.tooltip}</span></span>`
+        ).join("");
+      } else {
+        tagsEl.innerHTML = '<span style="font-size:13px;color:var(--text-tertiary);">뚜렷한 특성 없음 (올라운더)</span>';
+      }
+
+      // 6축 레이더 차트
+      const labels = ["공격력", "방어력", "속도", "타점", "리치", "후로"];
+      const scores = [
+        data.profile.attack.score, data.profile.defense.score,
+        data.profile.speed.score, data.profile.score.score,
+        data.profile.richi.score, data.profile.fulu.score,
+      ];
 
       const ctx = document.getElementById("radarChart").getContext("2d");
       if (radarChart) radarChart.destroy();
@@ -167,7 +183,7 @@ document.addEventListener("DOMContentLoaded", () => {
             pointRadius: 4,
           }, {
             label: "리그 평균",
-            data: [50, 50, 50, 50, 50],
+            data: [50, 50, 50, 50, 50, 50],
             backgroundColor: "transparent",
             borderColor: "rgba(150,150,150,0.4)",
             borderWidth: 1,
