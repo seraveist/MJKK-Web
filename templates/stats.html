@@ -17,17 +17,13 @@
 <div class="stats-container">
   <h1>개인 통계</h1>
 
-  <div style="margin-bottom:12px;">
-    <div style="font-size:13px;font-weight:500;color:var(--text-secondary);margin-bottom:6px;">시즌 선택 (복수 가능)</div>
-    <div class="season-tabs" id="seasonCheckArea">
-      {% for s in available_seasons %}
-        <label class="tab season-check-label" style="cursor:pointer;display:flex;align-items:center;gap:4px;">
-          <input type="checkbox" class="season-chk" value="{{ s }}" {% if s|string == season|string %}checked{% endif %}> 시즌 {{ s }}
-        </label>
-      {% endfor %}
-      <button class="tab" id="btnAllSeason" onclick="selectAllSeasons()">전체</button>
-    </div>
+  <div class="season-tabs" id="seasonTabArea">
+    {% for s in available_seasons %}
+      <button class="tab season-btn {% if s|string == season|string %}active{% endif %}" data-season="{{ s }}">시즌 {{ s }}</button>
+    {% endfor %}
+    <button class="tab season-btn" id="btnAllSeason" data-season="all">전체</button>
   </div>
+  <div style="font-size:11px;color:var(--text-tertiary);margin-top:4px;margin-bottom:12px;">복수 시즌 선택: 클릭으로 토글</div>
 
   <div class="separator"></div>
 

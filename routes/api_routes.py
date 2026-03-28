@@ -4,6 +4,7 @@ API 라우트 (v3 — 전체 통합)
 """
 import json
 import logging
+import re
 
 from flask import Blueprint, jsonify, request, current_app
 
@@ -395,12 +396,22 @@ def get_game_detail(ref):
                             win_seat = si
                             break
                     cleaned = []
+                    dora_counts = {}
                     for y in yaku_list:
                         if "Dora" in y or "ドラ" in y or "Red" in y or "赤" in y:
+                            # 도라 개수 추출
+                            nums = re.findall(r"\d+", y)
+                            val = int(nums[0]) if nums else 1
+                            if "Ura" in y or "裏" in y:
+                                dora_counts["뒷도라"] = dora_counts.get("뒷도라", 0) + val
+                            elif "Red" in y or "赤" in y:
+                                dora_counts["적도라"] = dora_counts.get("적도라", 0) + val
+                            else:
+                                dora_counts["도라"] = dora_counts.get("도라", 0) + val
                             continue
                         cleaned.append(y.split("(")[0])
-                    if cleaned:
-                        yakus_info.append({"seat": win_seat, "yakus": cleaned})
+                    if cleaned or dora_counts:
+                        yakus_info.append({"seat": win_seat, "yakus": cleaned, "dora": dora_counts})
 
             rounds.append({
                 "label": round_label,

@@ -200,7 +200,9 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     const totalGames = rankingFiltered.reduce((s, p) => s + p.games, 0) / 4;
-    rankingInfo.textContent = `${rankingFiltered.length}명 / ${Math.round(totalGames)}국`;
+    const maxGames = Math.max(...rankingFiltered.map(p => p.games), 0);
+    const minRequired = Math.max(3, Math.floor(maxGames * 0.3));
+    rankingInfo.textContent = `${rankingFiltered.length}명 / ${Math.round(totalGames)}국 (기준: ${minRequired}국 이상)`;
   }
 
   // ── 메타 분석 ──

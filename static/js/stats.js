@@ -35,21 +35,15 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   function syncTabUI(season) {
-    // 멀티 시즌: "5,6" 또는 "all" 또는 "7"
     const parts = season === "all" ? [] : String(season).split(",");
-    document.querySelectorAll(".season-chk").forEach(chk => {
-      if (season === "all") {
-        chk.checked = true;
+    const allBtn = document.getElementById("btnAllSeason");
+    document.querySelectorAll(".season-btn").forEach(btn => {
+      if (btn.id === "btnAllSeason") {
+        btn.classList.toggle("active", season === "all");
       } else {
-        chk.checked = parts.includes(chk.value);
+        btn.classList.toggle("active", season === "all" || parts.includes(btn.dataset.season));
       }
     });
-    const allBtn = document.getElementById("btnAllSeason");
-    if (allBtn) {
-      const allBoxes = document.querySelectorAll(".season-chk");
-      const checked = document.querySelectorAll(".season-chk:checked");
-      allBtn.classList.toggle("active", checked.length === allBoxes.length);
-    }
   }
 
   // 카테고리 탭
@@ -176,6 +170,11 @@ document.addEventListener("DOMContentLoaded", () => {
         if (data.error) { showPageEmpty("이 시즌의 대국 데이터가 없습니다."); return; }
         const stats = data.stats || data.data;
         if (!stats) { showPageEmpty("통계를 계산할 수 없습니다."); return; }
+        if (!stats.games || stats.games === 0) {
+          showPageEmpty("이 시즌에 해당 플레이어의 대국 데이터가 없습니다.");
+          document.getElementById("streakSection").style.display = "none";
+          return;
+        }
         cachedStats = stats;
         renderTable(stats);
         renderYakus(stats.yakus);
@@ -207,28 +206,47 @@ document.addEventListener("DOMContentLoaded", () => {
       if (currentPlayer) loadStats(currentPlayer);
     });
 
-  // 시즌 체크박스 변경 시
+  // ── 시즌 버튼 토글 ──
   function getSeasonParam() {
-    const allBoxes = document.querySelectorAll(".season-chk");
-    const checked = [...document.querySelectorAll(".season-chk:checked")].map(c => c.value);
-    if (checked.length === 0) return String(window.config.season);
-    if (checked.length === allBoxes.length) return "all";
-    if (checked.length === 1) return checked[0];
-    return checked.join(",");
+    const seasonBtns = document.querySelectorAll(".season-btn:not(#btnAllSeason)");
+    const active = [...seasonBtns].filter(b => b.classList.contains("active")).map(b => b.dataset.season);
+    const allBtn = document.getElementById("btnAllSeason");
+    if (allBtn.classList.contains("active") || active.length === 0 || active.length === seasonBtns.length) return "all";
+    if (active.length === 1) return active[0];
+    return active.join(",");
   }
 
   function onSeasonChange() {
     currentSeason = getSeasonParam();
-    // "전체" 버튼 활성화 표시
-    const allBoxes = document.querySelectorAll(".season-chk");
-    const checked = document.querySelectorAll(".season-chk:checked");
-    document.getElementById("btnAllSeason").classList.toggle("active", checked.length === allBoxes.length);
     pushState();
     if (currentPlayer) loadStats(currentPlayer);
   }
 
-  document.querySelectorAll(".season-chk").forEach(chk => {
-    chk.addEventListener("change", onSeasonChange);
+  // 개별 시즌 버튼 클릭: 토글
+  document.querySelectorAll(".season-btn:not(#btnAllSeason)").forEach(btn => {
+    btn.addEventListener("click", function () {
+      this.classList.toggle("active");
+      // 전체 버튼 비활성화
+      const allBtn = document.getElementById("btnAllSeason");
+      allBtn.classList.remove("active");
+      // 모두 선택되면 자동 전체 전환
+      const seasonBtns = document.querySelectorAll(".season-btn:not(#btnAllSeason)");
+      const activeCount = [...seasonBtns].filter(b => b.classList.contains("active")).length;
+      if (activeCount === seasonBtns.length || activeCount === 0) {
+        allBtn.classList.add("active");
+        if (activeCount === seasonBtns.length) {
+          seasonBtns.forEach(b => b.classList.remove("active"));
+        }
+      }
+      onSeasonChange();
+    });
+  });
+
+  // 전체 버튼 클릭
+  document.getElementById("btnAllSeason").addEventListener("click", function () {
+    document.querySelectorAll(".season-btn").forEach(b => b.classList.remove("active"));
+    this.classList.add("active");
+    onSeasonChange();
   });
 
   // 국수 변경
@@ -237,11 +255,3 @@ document.addEventListener("DOMContentLoaded", () => {
     if (currentPlayer) loadStats(currentPlayer);
   });
 });
-
-// 전역: "전체" 버튼 클릭 시 모든 체크박스 선택
-function selectAllSeasons() {
-  const boxes = document.querySelectorAll(".season-chk");
-  boxes.forEach(b => b.checked = true);
-  // 체크박스 change 이벤트 수동 트리거
-  if (boxes.length > 0) boxes[0].dispatchEvent(new Event("change"));
-}

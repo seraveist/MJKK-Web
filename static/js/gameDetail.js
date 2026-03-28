@@ -116,7 +116,7 @@ function renderScoreFlowChart(data) {
   });
 }
 
-const YAKU_KR = {"門前清自摸和":"멘젠쯔모","立直":"리치","一発":"일발","平和":"핑후","断幺九":"탕야오","一盃口":"이페코","混一色":"혼일색","清一色":"청일색","七対子":"치또이","三色同順":"삼색동순","一気通貫":"일기통관","対々和":"또이또이","混全帯幺九":"찬타","三色同刻":"삼색동각","混老頭":"혼노두","三暗刻":"산안커","小三元":"소삼원","二盃口":"량페코","純全帯幺九":"준찬타","嶺上開花":"영상개화","海底摸月":"해저로월","河底撈魚":"하저로어","槍槓":"창깡","両立直":"더블리치","国士無双":"국사무쌍","四暗刻":"스안커","大三元":"대삼원","小四喜":"소사희","大四喜":"대사희","字一色":"자일색","緑一色":"녹일색","清老頭":"청노두","九蓮宝燈":"구련보등","Riichi":"리치","Ippatsu":"일발","Pinfu":"핑후","Tanyao":"탕야오","Iipeiko":"이페코","Honitsu":"혼일색","Chinitsu":"청일색","Chiitoitsu":"치또이","Toitoi":"또이또이","Sanankou":"산안커","Shousangen":"소삼원","Chanta":"찬타","Ittsu":"일기통관","Sanshoku":"삼색동순","Sanshoku Doukou":"삼색동각","Honroutou":"혼노두","Junchan":"준찬타","Ryanpeikou":"량페코","Rinshan Kaihou":"영상개화","Haitei":"해저로월","Houtei":"하저로어","Chankan":"창깡","Tsumo":"멘젠쯔모"};
+const YAKU_KR = {"門前清自摸和":"멘젠쯔모","立直":"리치","一発":"일발","平和":"핑후","断幺九":"탕야오","一盃口":"이페코","混一色":"혼일색","清一色":"청일색","七対子":"치또이","三色同順":"삼색동순","一気通貫":"일기통관","対々和":"또이또이","混全帯幺九":"찬타","三色同刻":"삼색동각","混老頭":"혼노두","三暗刻":"산안커","小三元":"소삼원","二盃口":"량페코","純全帯幺九":"준찬타","嶺上開花":"영상개화","海底摸月":"해저로월","河底撈魚":"하저로어","槍槓":"창깡","両立直":"더블리치","国士無双":"국사무쌍","四暗刻":"스안커","大三元":"대삼원","小四喜":"소사희","大四喜":"대사희","字一色":"자일색","緑一色":"녹일색","清老頭":"청노두","九蓮宝燈":"구련보등","流し満貫":"유국만관","数え役満":"헤아림 역만","役牌 白":"역패 백","役牌 發":"역패 발","役牌 中":"역패 중","自風 東":"자풍 동","自風 南":"자풍 남","自風 西":"자풍 서","自風 北":"자풍 북","場風 東":"장풍 동","場風 南":"장풍 남","場風 西":"장풍 서","場風 北":"장풍 북","Riichi":"리치","Ippatsu":"일발","Pinfu":"핑후","Tanyao":"탕야오","Iipeiko":"이페코","Honitsu":"혼일색","Chinitsu":"청일색","Chiitoitsu":"치또이","Toitoi":"또이또이","Sanankou":"산안커","Shousangen":"소삼원","Chanta":"찬타","Ittsu":"일기통관","Sanshoku":"삼색동순","Sanshoku Doukou":"삼색동각","Honroutou":"혼노두","Junchan":"준찬타","Ryanpeikou":"량페코","Rinshan Kaihou":"영상개화","Haitei":"해저로월","Houtei":"하저로어","Chankan":"창깡","Tsumo":"멘젠쯔모","Yakuhai":"역패","Double Riichi":"더블리치","Kokushi Musou":"국사무쌍","Suuankou":"스안커","Daisangen":"대삼원","Shousuushii":"소사희","Daisuushii":"대사희","Tsuuiisou":"자일색","Ryuuiisou":"녹일색","Chinroutou":"청노두","Chuuren Poutou":"구련보등"};
 
 function renderRoundsList(data) {
   const container = document.getElementById("roundsList");
@@ -143,8 +143,19 @@ function renderRoundsList(data) {
     let yakuStr = "";
     if (r.yakus && r.yakus.length > 0) {
       const yakuNames = r.yakus.flatMap(y => y.yakus).map(y => YAKU_KR[y] || y);
-      if (yakuNames.length > 0) {
-        yakuStr = `<div style="font-size:11px;color:var(--color-accent);margin-top:2px;">${yakuNames.join(" / ")}</div>`;
+      // 도라 정보 합산
+      const doraMerged = {};
+      r.yakus.forEach(y => {
+        if (y.dora) {
+          for (const [k, v] of Object.entries(y.dora)) {
+            doraMerged[k] = (doraMerged[k] || 0) + v;
+          }
+        }
+      });
+      const doraParts = Object.entries(doraMerged).map(([k, v]) => `${k} ${v}`);
+      const allParts = [...yakuNames, ...doraParts];
+      if (allParts.length > 0) {
+        yakuStr = `<div style="font-size:11px;color:var(--color-accent);margin-top:2px;">${allParts.join(" / ")}</div>`;
       }
     }
 
@@ -153,14 +164,17 @@ function renderRoundsList(data) {
       const color = change > 0 ? "var(--color-best)" : change < 0 ? "var(--color-worst)" : "var(--text-tertiary)";
       const sign = change > 0 ? "+" : "";
       return `<div class="round-score">
-        <div style="font-size:12px;color:var(--text-tertiary);">${name}</div>
-        <div style="color:${color};font-weight:${change !== 0 ? 600 : 400};">${sign}${change.toLocaleString()}</div>
+        <div style="font-size:11px;color:var(--text-tertiary);">${name}</div>
+        <div style="color:${color};font-weight:${change !== 0 ? 600 : 400};font-size:13px;">${sign}${change.toLocaleString()}</div>
       </div>`;
     }).join("");
 
     return `<div class="round-row">
-      <div class="round-label">${r.label}</div>
-      <div style="min-width:90px;">${resultBadge}${winnerName ? ` <span style="font-size:12px;color:var(--text-secondary);">${winnerName}</span>` : ""}${yakuStr}</div>
+      <div class="round-left">
+        <div class="round-label">${r.label}</div>
+        <div>${resultBadge}${winnerName ? ` <span style="font-size:12px;color:var(--text-secondary);">${winnerName}</span>` : ""}</div>
+        ${yakuStr}
+      </div>
       <div class="round-scores">${scores}</div>
     </div>`;
   }).join("");
