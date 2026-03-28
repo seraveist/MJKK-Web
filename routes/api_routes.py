@@ -847,21 +847,37 @@ def get_profile(player_name):
             z = (raw - avg) / std if std > 0 else 0
             if ak == "defense":
                 z = -z  # 방총률은 낮을수록 좋음
-            score = max(0, min(100, 50 + z * 15))
+            score = max(0, min(100, 50 + z * 20))
             profile[ak] = {"raw": round(raw, 4), "avg": round(avg, 4), "std": round(std, 4), "z": round(z, 2), "score": round(score, 1)}
 
-        # 스타일 분류
-        a, d, r, f = profile["attack"]["score"], profile["defense"]["score"], profile["richi"]["score"], profile["fulu"]["score"]
-        if a > 60 and d < 40:
-            style = "공격형"
-        elif d > 60 and a < 40:
-            style = "수비형"
-        elif r > 65:
-            style = "멘젠형"
-        elif f > 65:
-            style = "후로형"
-        else:
+        # 스타일 분류 — 가장 두드러진 축 기반 상대 분류
+        a, d, r, f, sc = profile["attack"]["score"], profile["defense"]["score"], profile["richi"]["score"], profile["fulu"]["score"], profile["score"]["score"]
+
+        # 50(리그 평균)에서 가장 많이 벗어난 축 찾기
+        deviations = {
+            "공격형": a - 50,
+            "수비형": d - 50,
+            "멘젠형": r - 50,
+            "후로형": f - 50,
+            "타점형": sc - 50,
+        }
+
+        # 복합 판정: 공격+타점 높으면 공격형, 수비+멘젠 높으면 수비형
+        composite = {
+            "공격형": (a + sc) / 2 - 50,
+            "수비형": (d + (100 - a)) / 2 - 50,
+            "멘젠형": (r + (100 - f)) / 2 - 50,
+            "후로형": (f + (100 - r)) / 2 - 50,
+        }
+
+        best_style = max(composite, key=composite.get)
+        best_deviation = composite[best_style]
+
+        # 편차가 너무 작으면 밸런스형 (리그 평균에서 3점 이내)
+        if best_deviation < 3:
             style = "밸런스형"
+        else:
+            style = best_style
 
         return jsonify({"player": player_name, "profile": profile, "style": style})
     except Exception as e:
@@ -994,7 +1010,11 @@ def get_comments(ref):
     db = _get_db()
     try:
         col = db._db["comments"]
-        comments = list(col.find({"game_ref": ref}, {"_id": 0}).sort("created_at", -1))
+        raw = list(col.find({"game_ref": ref}).sort("created_at", -1))
+        comments = []
+        for c in raw:
+            c["id"] = str(c.pop("_id"))
+            comments.append(c)
         return jsonify({"comments": comments})
     except Exception as e:
         logger.error("Error fetching comments", exc_info=e)
@@ -1026,15 +1046,15 @@ def add_comment(ref):
         return jsonify({"error": "Failed to add comment"}), 500
 
 
-@api_bp.route("/api/comments/<path:ref>/<int:idx>", methods=["DELETE"])
-def delete_comment(ref, idx):
+@api_bp.route("/api/comments/<path:ref>/<comment_id>", methods=["DELETE"])
+def delete_comment(ref, comment_id):
     db = _get_db()
     try:
+        from bson import ObjectId
         col = db._db["comments"]
-        comments = list(col.find({"game_ref": ref}).sort("created_at", -1))
-        if idx < 0 or idx >= len(comments):
+        result = col.delete_one({"_id": ObjectId(comment_id), "game_ref": ref})
+        if result.deleted_count == 0:
             return jsonify({"error": "코멘트를 찾을 수 없습니다."}), 404
-        col.delete_one({"_id": comments[idx]["_id"]})
         return jsonify({"message": "삭제되었습니다."})
     except Exception as e:
         logger.error("Error deleting comment", exc_info=e)
