@@ -35,6 +35,16 @@ class DatabaseService:
             # [신규] name 멀티키 인덱스 — 특정 플레이어가 포함된 게임 검색
             self._collection.create_index([("name", ASCENDING)], background=True)
 
+            # [신규] 코멘트 인덱스
+            self._db["comments"].create_index([("game_ref", ASCENDING)], background=True)
+
+            # [신규] 설정 초기화
+            try:
+                from services.settings import init_default_settings
+                init_default_settings(self)
+            except Exception as e:
+                logger.warning("Settings init skipped: %s", e)
+
             logger.info("Connected to MongoDB. DB=%s, indexes created.", self._config.DB_NAME)
         except Exception as e:
             logger.error("Failed to connect to MongoDB", exc_info=e)
@@ -133,6 +143,16 @@ class DatabaseService:
 
     def find_log_by_ref(self, ref):
         return self._collection.find_one({"ref": ref}, {"_id": 0})
+
+    def fetch_shared_games(self, season_param, alias1, alias2):
+        """집계 파이프라인으로 두 플레이어가 동탁인 게임만 조회 (name 인덱스 활용)"""
+        season_filter = self._season_filter(season_param)
+        pipeline = [
+            {"$match": {**season_filter, "name": {"$all": [alias1, alias2]}}},
+            {"$project": {"_id": 0, "ref": 1, "name": 1, "sc": 1, "title": 1}},
+            {"$sort": {"title.1": -1}},
+        ]
+        return list(self._collection.aggregate(pipeline))
 
     def get_current_season(self):
         now = datetime.datetime.now()

@@ -203,3 +203,55 @@ function renderRoundsList(data) {
     </div>`;
   }).join("");
 }
+
+// ── 코멘트 ──
+function loadComments() {
+  const ref = window.config.ref;
+  fetch(`/api/comments/${ref}`)
+    .then(r => r.json())
+    .then(data => {
+      const list = document.getElementById("commentList");
+      if (!data.comments || data.comments.length === 0) {
+        list.innerHTML = '<div style="font-size:13px;color:var(--text-tertiary);">아직 코멘트가 없습니다.</div>';
+        return;
+      }
+      list.innerHTML = data.comments.map((c, i) => `
+        <div style="padding:8px 0;border-bottom:1px solid var(--border-light);font-size:13px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-weight:600;color:var(--text-heading);">${c.user_name}</span>
+            ${c.is_highlight ? '<span style="font-size:10px;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:8px;">하이라이트</span>' : ''}
+            <span style="font-size:11px;color:var(--text-tertiary);margin-left:auto;">${(c.created_at || '').slice(0, 16).replace('T', ' ')}</span>
+          </div>
+          <div style="margin-top:4px;color:var(--text-secondary);">${c.text}</div>
+        </div>
+      `).join("");
+    })
+    .catch(e => console.error("Comments load error:", e));
+}
+
+function submitComment() {
+  const ref = window.config.ref;
+  const name = document.getElementById("commentName").value.trim() || "익명";
+  const text = document.getElementById("commentText").value.trim();
+  const highlight = document.getElementById("commentHighlight").checked;
+  if (!text) return;
+
+  fetch(`/api/comments/${ref}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user_name: name, text: text, is_highlight: highlight }),
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) { alert(data.error); return; }
+      document.getElementById("commentText").value = "";
+      document.getElementById("commentHighlight").checked = false;
+      loadComments();
+    })
+    .catch(e => alert("코멘트 등록 실패"));
+}
+
+// 페이지 로드 시 코멘트도 로딩
+document.addEventListener("DOMContentLoaded", () => {
+  setTimeout(loadComments, 500);
+});

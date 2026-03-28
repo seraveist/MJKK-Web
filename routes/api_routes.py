@@ -483,10 +483,6 @@ def get_matchup():
         if p1_name == p2_name:
             return jsonify({"error": "같은 플레이어입니다."}), 400
 
-        data = db.fetch_game_logs(season_param, lightweight=True)
-        if not data:
-            return jsonify({"error": "No game data found"}), 404
-
         p1_user = find_user_by_alias(USERS, p1_name) or next((u for u in USERS if u["name"] == p1_name), None)
         p2_user = find_user_by_alias(USERS, p2_name) or next((u for u in USERS if u["name"] == p2_name), None)
         if not p1_user or not p2_user:
@@ -494,6 +490,18 @@ def get_matchup():
 
         p1_aliases = set(p1_user.get("aliases", [p1_name]))
         p2_aliases = set(p2_user.get("aliases", [p2_name]))
+
+        # [최적화] 집계 파이프라인으로 동탁 게임만 DB에서 필터링
+        season_filter = db._season_filter(season_param)
+        pipeline = [
+            {"$match": {**season_filter, "$and": [
+                {"name": {"$in": list(p1_aliases)}},
+                {"name": {"$in": list(p2_aliases)}},
+            ]}},
+            {"$project": {"_id": 0, "ref": 1, "name": 1, "sc": 1, "title": 1}},
+            {"$sort": {"title.1": -1}},
+        ]
+        data = list(db.collection.aggregate(pipeline))
 
         shared_games = []
         for gl in data:
@@ -793,6 +801,299 @@ def health_check():
 
     status["checks"]["cache"] = cache.stats
     return jsonify(status), 200 if status["status"] == "ok" else 503
+
+
+# ==================================================================
+# [신규] 플레이 스타일 프로파일
+# ==================================================================
+
+@api_bp.route("/api/profile/<player_name>", methods=["GET"])
+def get_profile(player_name):
+    db = _get_db()
+    try:
+        season_param = request.args.get("season", str(db.get_current_season()))
+        import statistics as stat_mod
+
+        precomputed = get_precomputed_stats(db, season_param)
+        stats = precomputed.get("stats", {}) if precomputed else {}
+
+        player_stats = stats.get(player_name)
+        if not player_stats or player_stats.get("games", 0) == 0:
+            return jsonify({"error": "No data"}), 404
+
+        # 리그 평균 + 표준편차 계산
+        axes_keys = {
+            "attack": ("winGame", "avg"),
+            "defense": ("chong", "avg"),
+            "richi": ("richi", "avg"),
+            "fulu": ("fulu", "avg"),
+            "score": ("winGame_score", "avg"),
+        }
+        league_vals = {k: [] for k in axes_keys}
+        for name, ps in stats.items():
+            if ps.get("games", 0) < 5:
+                continue
+            for ak, (k1, k2) in axes_keys.items():
+                v = (ps.get(k1) or {}).get(k2)
+                if v is not None and isinstance(v, (int, float)):
+                    league_vals[ak].append(v)
+
+        profile = {}
+        for ak, (k1, k2) in axes_keys.items():
+            vals = league_vals[ak]
+            avg = sum(vals) / len(vals) if vals else 0
+            std = stat_mod.stdev(vals) if len(vals) >= 2 else 1
+            raw = (player_stats.get(k1) or {}).get(k2, 0) or 0
+            z = (raw - avg) / std if std > 0 else 0
+            if ak == "defense":
+                z = -z  # 방총률은 낮을수록 좋음
+            score = max(0, min(100, 50 + z * 15))
+            profile[ak] = {"raw": round(raw, 4), "avg": round(avg, 4), "std": round(std, 4), "z": round(z, 2), "score": round(score, 1)}
+
+        # 스타일 분류
+        a, d, r, f = profile["attack"]["score"], profile["defense"]["score"], profile["richi"]["score"], profile["fulu"]["score"]
+        if a > 60 and d < 40:
+            style = "공격형"
+        elif d > 60 and a < 40:
+            style = "수비형"
+        elif r > 65:
+            style = "멘젠형"
+        elif f > 65:
+            style = "후로형"
+        else:
+            style = "밸런스형"
+
+        return jsonify({"player": player_name, "profile": profile, "style": style})
+    except Exception as e:
+        logger.error("Error computing profile for %s", player_name, exc_info=e)
+        return jsonify({"error": "Failed to compute profile"}), 500
+
+
+# ==================================================================
+# [신규] 예측/시뮬레이션
+# ==================================================================
+
+@api_bp.route("/api/simulate", methods=["GET"])
+def simulate():
+    db = _get_db()
+    try:
+        players_param = request.args.get("players", "")
+        season_param = request.args.get("season", str(db.get_current_season()))
+        n_sim = min(int(request.args.get("n", "10000")), 50000)
+
+        player_names = [p.strip() for p in players_param.split(",") if p.strip()]
+        if len(player_names) != 4:
+            return jsonify({"error": "4명의 플레이어를 지정해주세요."}), 400
+
+        from services.elo import get_elo_from_db
+        elo_data = get_elo_from_db(db, season_param)
+        if not elo_data or not elo_data.get("ratings"):
+            return jsonify({"error": "ELO 데이터가 없습니다."}), 404
+
+        ratings = [elo_data["ratings"].get(p, 1500) for p in player_names]
+
+        import random
+        results = [[0, 0, 0, 0] for _ in range(4)]
+        for _ in range(n_sim):
+            perf = [(random.gauss(r, 200), i) for i, r in enumerate(ratings)]
+            perf.sort(reverse=True)
+            for rank, (_, pi) in enumerate(perf):
+                results[pi][rank] += 1
+
+        pcts = [[round(r / n_sim * 100, 1) for r in res] for res in results]
+
+        return jsonify({
+            "players": [{"name": player_names[i], "rating": round(ratings[i], 1),
+                         "first": pcts[i][0], "second": pcts[i][1], "third": pcts[i][2], "fourth": pcts[i][3]}
+                        for i in range(4)],
+            "simulations": n_sim,
+        })
+    except Exception as e:
+        logger.error("Error in simulation", exc_info=e)
+        return jsonify({"error": "Failed to simulate"}), 500
+
+
+# ==================================================================
+# [신규] 시즌 리포트
+# ==================================================================
+
+@api_bp.route("/api/report", methods=["GET"])
+def get_season_report():
+    db = _get_db()
+    try:
+        season_param = request.args.get("season", str(db.get_current_season()))
+
+        from services.awards import calculate_awards
+        from services.elo import get_elo_from_db
+
+        # 기존 데이터 수집
+        ranking_data = None
+        try:
+            data = db.fetch_game_logs(season_param, lightweight=True)
+            from services.ranking import calculate_ranking
+            ranking_data = calculate_ranking(data)
+        except Exception:
+            pass
+
+        awards = calculate_awards(db, season_param)
+        elo_data = get_elo_from_db(db, season_param)
+
+        precomputed = get_precomputed_stats(db, season_param)
+        stats = precomputed.get("stats", {}) if precomputed else {}
+
+        # 요약
+        total_games = 0
+        total_players = 0
+        if ranking_data:
+            filtered = [p for p in ranking_data["ranking"] if p["games"] > 0]
+            total_games = sum(p["games"] for p in filtered) // 4
+            total_players = len(filtered)
+
+        # 역만/삼배만 하이라이트
+        highlights = []
+        try:
+            full_data = db.fetch_game_logs(season_param, lightweight=False)
+            for gl in (full_data or []):
+                bh = _detect_big_hands(gl)
+                for player, tier in bh.items():
+                    if tier in ("삼배만", "역만"):
+                        title = gl.get("title", ["", ""])
+                        highlights.append({"player": player, "tier": tier, "date": title[1] if len(title) > 1 else "", "ref": gl.get("ref", "")})
+        except Exception:
+            pass
+
+        # 최종 랭킹
+        final_ranking = []
+        if ranking_data:
+            final_ranking = sorted([p for p in ranking_data["ranking"] if p["games"] > 0], key=lambda x: (-x["games"], -x["point_avg"]))[:10]
+
+        # ELO 최종
+        elo_final = {}
+        if elo_data and elo_data.get("ratings"):
+            elo_final = dict(sorted(elo_data["ratings"].items(), key=lambda x: -x[1]))
+
+        return jsonify({
+            "season": season_param,
+            "summary": {"total_games": total_games, "total_players": total_players},
+            "awards": awards,
+            "ranking": final_ranking,
+            "elo": elo_final,
+            "highlights": sorted(highlights, key=lambda x: x["date"], reverse=True),
+        })
+    except Exception as e:
+        logger.error("Error generating report", exc_info=e)
+        return jsonify({"error": "Failed to generate report"}), 500
+
+
+# ==================================================================
+# [신규] 대국 코멘트
+# ==================================================================
+
+@api_bp.route("/api/comments/<path:ref>", methods=["GET"])
+def get_comments(ref):
+    db = _get_db()
+    try:
+        col = db._db["comments"]
+        comments = list(col.find({"game_ref": ref}, {"_id": 0}).sort("created_at", -1))
+        return jsonify({"comments": comments})
+    except Exception as e:
+        logger.error("Error fetching comments", exc_info=e)
+        return jsonify({"error": "Failed to fetch comments"}), 500
+
+
+@api_bp.route("/api/comments/<path:ref>", methods=["POST"])
+def add_comment(ref):
+    db = _get_db()
+    try:
+        import datetime
+        data = request.get_json()
+        if not data or not data.get("text", "").strip():
+            return jsonify({"error": "내용을 입력해주세요."}), 400
+
+        comment = {
+            "game_ref": ref,
+            "round_index": data.get("round_index"),
+            "user_name": data.get("user_name", "익명"),
+            "text": data["text"].strip()[:500],
+            "is_highlight": data.get("is_highlight", False),
+            "created_at": datetime.datetime.utcnow().isoformat(),
+        }
+        db._db["comments"].insert_one(comment)
+        comment.pop("_id", None)
+        return jsonify({"message": "코멘트가 등록되었습니다.", "comment": comment})
+    except Exception as e:
+        logger.error("Error adding comment", exc_info=e)
+        return jsonify({"error": "Failed to add comment"}), 500
+
+
+@api_bp.route("/api/comments/<path:ref>/<int:idx>", methods=["DELETE"])
+def delete_comment(ref, idx):
+    db = _get_db()
+    try:
+        col = db._db["comments"]
+        comments = list(col.find({"game_ref": ref}).sort("created_at", -1))
+        if idx < 0 or idx >= len(comments):
+            return jsonify({"error": "코멘트를 찾을 수 없습니다."}), 404
+        col.delete_one({"_id": comments[idx]["_id"]})
+        return jsonify({"message": "삭제되었습니다."})
+    except Exception as e:
+        logger.error("Error deleting comment", exc_info=e)
+        return jsonify({"error": "Failed to delete comment"}), 500
+
+
+@api_bp.route("/api/highlights", methods=["GET"])
+def get_highlight_comments():
+    db = _get_db()
+    try:
+        season_param = request.args.get("season", str(db.get_current_season()))
+        col = db._db["comments"]
+        highlights = list(col.find({"is_highlight": True}, {"_id": 0}).sort("created_at", -1).limit(20))
+        return jsonify({"highlights": highlights})
+    except Exception as e:
+        return jsonify({"error": "Failed to fetch highlights"}), 500
+
+
+# ==================================================================
+# [신규] 설정 관리 API
+# ==================================================================
+
+@api_bp.route("/api/settings", methods=["GET"])
+def get_settings():
+    db = _get_db()
+    from services.settings import get_all_settings
+    return jsonify(get_all_settings(db))
+
+
+@api_bp.route("/api/settings", methods=["POST"])
+def update_settings():
+    db = _get_db()
+    pw = current_app.config["APP_CONFIG"].UPLOAD_PASSWORD
+    if pw:
+        submitted = request.headers.get("X-Admin-Password", "")
+        if submitted != pw:
+            return jsonify({"error": "Unauthorized"}), 403
+    try:
+        data = request.get_json()
+        from services.settings import set_setting
+        for key, value in data.items():
+            set_setting(db, key, value)
+
+        # ELO 파라미터 변경 시 전체 재계산 트리거
+        if "elo_params" in data:
+            from services.elo import calculate_elo_for_season, save_elo_to_db
+            db._db["elo_ratings"].delete_many({})
+            import threading
+            def _recompute():
+                for s in [str(db.get_current_season()), "all"]:
+                    elo = calculate_elo_for_season(db, s)
+                    if elo:
+                        save_elo_to_db(db, s, elo)
+            threading.Thread(target=_recompute, daemon=True).start()
+
+        return jsonify({"message": "설정이 저장되었습니다."})
+    except Exception as e:
+        logger.error("Error updating settings", exc_info=e)
+        return jsonify({"error": "Failed to update settings"}), 500
 
 
 # ==================================================================

@@ -93,3 +93,9 @@ def matchup_page():
 def game_detail_page(ref):
     s, a = _season_context()
     return render_template("gameDetail.html", ref=ref, season=s, available_seasons=a)
+
+
+@main_bp.route("/report", methods=["GET"])
+def report_page():
+    s, a = _season_context()
+    return render_template("report.html", season=s, available_seasons=a)

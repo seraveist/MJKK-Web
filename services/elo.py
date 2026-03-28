@@ -17,26 +17,40 @@ DEFAULT_RATING = 1500
 DEFAULT_K = 6
 DEFAULT_NORM = 8000
 ELO_COLLECTION = "elo_ratings"
-ELO_HISTORY_COLLECTION = "elo_history"
 
 
-def calculate_elo_for_season(db_service, season_param, K=DEFAULT_K, NORM=DEFAULT_NORM):
+def _get_elo_params(db_service):
+    """설정에서 ELO 파라미터 조회"""
+    try:
+        from services.settings import get_setting
+        params = get_setting(db_service, "elo_params")
+        if params:
+            return params.get("K", DEFAULT_K), params.get("NORM", DEFAULT_NORM), params.get("initial", DEFAULT_RATING)
+    except Exception:
+        pass
+    return DEFAULT_K, DEFAULT_NORM, DEFAULT_RATING
+
+
+def calculate_elo_for_season(db_service, season_param, K=None, NORM=None):
     """
     시즌 전체 대국을 시간순으로 처리하여 ELO 레이팅 계산.
-    Returns: { "ratings": {name: rating, ...}, "history": {name: [(date, rating), ...], ...} }
     """
+    # 설정에서 파라미터 조회
+    cfg_K, cfg_NORM, cfg_initial = _get_elo_params(db_service)
+    if K is None: K = cfg_K
+    if NORM is None: NORM = cfg_NORM
+
     data = db_service.fetch_game_logs_for_stats(season_param)
     if not data:
         return None
 
-    # 날짜순 정렬
     data.sort(key=lambda x: x.get("title", ["", ""])[1] if len(x.get("title", [])) > 1 else "")
 
     ratings = {}
     history = {}
 
     for user in USERS:
-        ratings[user["name"]] = DEFAULT_RATING
+        ratings[user["name"]] = cfg_initial
         history[user["name"]] = []
 
     for game_log in data:

@@ -30,7 +30,16 @@ def calculate_awards(db_service, season_param):
         for p in ranking_data["ranking"]:
             if p["games"] > max_games:
                 max_games = p["games"]
-    dynamic_min = max(3, int(max_games * 0.3))
+
+    # 설정에서 최소 대국 비율 조회
+    try:
+        from services.settings import get_setting
+        awards_cfg = get_setting(db_service, "awards_config") or {}
+        min_ratio = awards_cfg.get("min_games_ratio", 0.3)
+        min_floor = awards_cfg.get("min_games_floor", 3)
+    except Exception:
+        min_ratio, min_floor = 0.3, 3
+    dynamic_min = max(min_floor, int(max_games * min_ratio))
 
     awards = []
 

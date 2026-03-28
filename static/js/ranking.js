@@ -246,6 +246,8 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
       document.getElementById("awardsSection").style.display = "";
+      const reportLink = document.getElementById("reportLink");
+      if (reportLink) reportLink.href = `/report?season=${currentSeason}`;
       document.getElementById("awardGrid").innerHTML = data.awards.map(a =>
         `<div class="award-card"><div class="a-title">${a.title}</div><div class="a-winner">${a.winner}</div><div class="a-value">${a.value}</div></div>`
       ).join("");

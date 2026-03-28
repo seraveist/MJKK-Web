@@ -139,6 +139,15 @@ def _refresh_users_cache():
     users = list(users_col.find({}, {"_id": 0, "name": 1, "aliases": 1}))
     if users:
         users_module.USERS = users
+    # 유저 변경 시 모든 통계/ELO 캐시 무효화
+    try:
+        from services.cache import cache
+        cache.clear()
+        db._db["precomputed_stats"].delete_many({})
+        db._db["elo_ratings"].delete_many({})
+        logger.info("All caches invalidated due to user change")
+    except Exception as e:
+        logger.warning("Cache invalidation on user change failed: %s", e)
 
 
 def _add_user(data):

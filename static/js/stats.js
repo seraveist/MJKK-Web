@@ -137,6 +137,54 @@ document.addEventListener("DOMContentLoaded", () => {
     } catch (e) { console.error(e); document.getElementById("streakSection").style.display = "none"; }
   }
 
+  // [신규] 플레이 스타일 프로파일
+  let radarChart = null;
+  async function loadProfile(player) {
+    try {
+      const res = await fetch(`/api/profile/${encodeURIComponent(player)}?season=${currentSeason}`);
+      const data = await res.json();
+      if (data.error) { document.getElementById("profileSection").style.display = "none"; return; }
+
+      document.getElementById("profileSection").style.display = "";
+      document.getElementById("profileStyle").textContent = data.style;
+
+      const labels = ["공격력", "수비력", "리치", "후로", "타점"];
+      const scores = [data.profile.attack.score, data.profile.defense.score, data.profile.richi.score, data.profile.fulu.score, data.profile.score.score];
+
+      const ctx = document.getElementById("radarChart").getContext("2d");
+      if (radarChart) radarChart.destroy();
+      radarChart = new Chart(ctx, {
+        type: "radar",
+        data: {
+          labels,
+          datasets: [{
+            label: player,
+            data: scores,
+            backgroundColor: "rgba(91,141,239,0.15)",
+            borderColor: "#5b8def",
+            borderWidth: 2,
+            pointBackgroundColor: "#5b8def",
+            pointRadius: 4,
+          }, {
+            label: "리그 평균",
+            data: [50, 50, 50, 50, 50],
+            backgroundColor: "transparent",
+            borderColor: "rgba(150,150,150,0.4)",
+            borderWidth: 1,
+            borderDash: [4, 4],
+            pointRadius: 0,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: { r: { min: 0, max: 100, ticks: { stepSize: 25, font: { size: 10 } }, pointLabels: { font: { size: 12 } } } },
+          plugins: { legend: { position: "bottom", labels: { font: { size: 11 } } } },
+        },
+      });
+    } catch (e) { console.error(e); document.getElementById("profileSection").style.display = "none"; }
+  }
+
   // [신규] 바로가기 링크 업데이트
   function updateNavLinks(player) {
     const nav = document.getElementById("navBtns");
@@ -180,6 +228,7 @@ document.addEventListener("DOMContentLoaded", () => {
         renderYakus(stats.yakus);
         if (stats.rankData && stats.rankData.length > 0) drawChart(stats.rankData);
         loadStreaks(player);
+        loadProfile(player);
       })
       .catch(e => { console.error("Error:", e); showPageError("데이터를 불러오는 중 오류가 발생했습니다."); })
       .finally(() => hideLoading());

@@ -22,6 +22,7 @@ document.querySelectorAll(".category-tabs .cat-tab").forEach(tab => {
     document.getElementById("trendView").style.display = view === "trend" ? "" : "none";
     document.getElementById("eloView").style.display = view === "elo" ? "" : "none";
     document.getElementById("seasonCmpView").style.display = view === "seasonCmp" ? "" : "none";
+    document.getElementById("simulateView").style.display = view === "simulate" ? "" : "none";
     if (view === "elo") loadElo();
   });
 });
@@ -37,6 +38,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     const sel = document.getElementById("seasonCmpPlayer");
     allPlayers.forEach(p => { const o = document.createElement("option"); o.value = p; o.textContent = p; sel.appendChild(o); });
 
+    // 시뮬레이션 셀렉트 초기화
+    ["simP1", "simP2", "simP3", "simP4"].forEach((id, idx) => {
+      const s = document.getElementById(id);
+      allPlayers.forEach(p => { const o = document.createElement("option"); o.value = p; o.textContent = p; s.appendChild(o); });
+      if (allPlayers.length > idx) s.selectedIndex = idx;
+    });
+
     // 활성 유저 기반 체크박스 빌드
     await rebuildPlayerChecks();
 
@@ -51,6 +59,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       document.getElementById("trendView").style.display = "none";
       document.getElementById("eloView").style.display = "none";
       document.getElementById("seasonCmpView").style.display = "";
+      document.getElementById("simulateView").style.display = "none";
       if (playerParam) sel.value = playerParam;
     } else {
       loadTrend();
@@ -287,4 +296,72 @@ async function loadSeasonCompare() {
     }
   } catch (e) { console.error(e); emptyEl.textContent = "오류가 발생했습니다."; emptyEl.className = "error-state"; emptyEl.style.display = "";
   } finally { document.getElementById("loading").style.display = "none"; }
+}
+
+// ══════════════════════════════════════
+// 대국 시뮬레이션
+// ══════════════════════════════════════
+let simChart = null;
+
+async function runSimulation() {
+  const players = ["simP1", "simP2", "simP3", "simP4"].map(id => document.getElementById(id).value);
+  const unique = new Set(players);
+  const emptyEl = document.getElementById("simEmpty");
+  const resultEl = document.getElementById("simResult");
+
+  if (unique.size !== 4) {
+    emptyEl.textContent = "4명 모두 다른 플레이어를 선택해주세요.";
+    emptyEl.style.display = "";
+    resultEl.style.display = "none";
+    return;
+  }
+
+  document.getElementById("loading").style.display = "flex";
+  try {
+    const res = await fetch(`/api/simulate?players=${players.join(",")}&season=${eloSeason}`);
+    const data = await res.json();
+    if (data.error) {
+      emptyEl.textContent = data.error;
+      emptyEl.style.display = "";
+      resultEl.style.display = "none";
+      return;
+    }
+
+    emptyEl.style.display = "none";
+    resultEl.style.display = "";
+    document.getElementById("simInfo").textContent = `${data.simulations.toLocaleString()}회 시뮬레이션 결과`;
+
+    const labels = data.players.map(p => `${p.name} (${Math.round(p.rating)})`);
+    const datasets = [
+      { label: "1위", data: data.players.map(p => p.first), backgroundColor: "rgba(245,158,11,0.7)" },
+      { label: "2위", data: data.players.map(p => p.second), backgroundColor: "rgba(91,141,239,0.7)" },
+      { label: "3위", data: data.players.map(p => p.third), backgroundColor: "rgba(156,163,175,0.7)" },
+      { label: "4위", data: data.players.map(p => p.fourth), backgroundColor: "rgba(239,108,108,0.7)" },
+    ];
+
+    const ctx = document.getElementById("simChart").getContext("2d");
+    if (simChart) simChart.destroy();
+    simChart = new Chart(ctx, {
+      type: "bar",
+      data: { labels, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: { stacked: true, ticks: { font: { size: 11 } } },
+          y: { stacked: true, max: 100, title: { display: true, text: "확률 (%)" } },
+        },
+        plugins: {
+          legend: { position: "bottom", labels: { font: { size: 11 } } },
+          tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y}%` } },
+        },
+      },
+    });
+  } catch (e) {
+    console.error(e);
+    emptyEl.textContent = "시뮬레이션 오류";
+    emptyEl.style.display = "";
+  } finally {
+    document.getElementById("loading").style.display = "none";
+  }
 }

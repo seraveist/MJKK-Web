@@ -23,6 +23,7 @@ async function loadUsers() {
     document.getElementById("adminPanel").style.display = "";
     renderUserTable(data.users);
     loadBackupInfo();
+    loadSettings();
   } catch (e) { document.getElementById("authMsg").textContent = "오류가 발생했습니다."; document.getElementById("authMsg").className = "msg-error"; }
 }
 
@@ -128,5 +129,45 @@ async function triggerPrecompute() {
     const data = await res.json();
     msgEl.textContent = data.message || "완료";
     msgEl.className = "msg-success";
+  } catch (e) { msgEl.textContent = "오류: " + e.message; msgEl.className = "msg-error"; }
+}
+
+// ── [신규] 설정 관리 ──
+async function loadSettings() {
+  try {
+    const res = await fetch("/api/settings");
+    const data = await res.json();
+    const elo = data.elo_params || {};
+    const awards = data.awards_config || {};
+    document.getElementById("setEloK").value = elo.K || 6;
+    document.getElementById("setEloNorm").value = elo.NORM || 8000;
+    document.getElementById("setEloInitial").value = elo.initial || 1500;
+    document.getElementById("setAwardsRatio").value = awards.min_games_ratio || 0.3;
+  } catch (e) { console.error("Settings load error:", e); }
+}
+
+async function saveSettings() {
+  const msgEl = document.getElementById("settingsMsg");
+  msgEl.textContent = "저장 중...";
+  msgEl.className = "msg-info";
+  try {
+    const res = await fetch("/api/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Admin-Password": adminPassword },
+      body: JSON.stringify({
+        elo_params: {
+          K: parseFloat(document.getElementById("setEloK").value) || 6,
+          NORM: parseInt(document.getElementById("setEloNorm").value) || 8000,
+          initial: parseInt(document.getElementById("setEloInitial").value) || 1500,
+        },
+        awards_config: {
+          min_games_ratio: parseFloat(document.getElementById("setAwardsRatio").value) || 0.3,
+          min_games_floor: 3,
+        },
+      }),
+    });
+    const data = await res.json();
+    if (data.error) { msgEl.textContent = data.error; msgEl.className = "msg-error"; }
+    else { msgEl.textContent = "설정이 저장되었습니다."; msgEl.className = "msg-success"; }
   } catch (e) { msgEl.textContent = "오류: " + e.message; msgEl.className = "msg-error"; }
 }
