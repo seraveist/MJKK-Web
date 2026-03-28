@@ -31,24 +31,38 @@ def _compute_all_player_stats(game_logs, users=None):
         return {}
 
     total_games = [tenhouLog.game(log) for log in game_logs]
-    all_stats = {}
 
+    # [v3] single-pass: 1번 순회로 N명 동시 처리
+    # alias → user name 매핑 빌드
+    alias_map = {}
+    player_stats = {}
     for user in users:
         name = user["name"]
+        ps = tenhouStatistics.PlayerStatistic(games=None, playerName=user)
+        player_stats[name] = ps
+        for alias in user.get("aliases", [name]):
+            alias_map[alias] = name
+
+    for game in total_games:
+        # 이 게임에 참여한 유저 찾기
+        matched = set()
+        for player in game.players:
+            user_name = alias_map.get(player.name)
+            if user_name and user_name not in matched:
+                matched.add(user_name)
+                player_stats[user_name].process_game(game)
+
+    # 결과 수집
+    all_stats = {}
+    for name, ps in player_stats.items():
         try:
-            ps = tenhouStatistics.PlayerStatistic(games=total_games, playerName=user)
             stats = json.loads(ps.json())
-
-            if hasattr(ps, "rank") and hasattr(ps.rank, "datas"):
-                stats["rankData"] = ps.rank.datas
-            else:
-                stats["rankData"] = []
-
+            stats["rankData"] = ps.rank_history
             games = stats.get("games", 0)
             if games > 0:
                 all_stats[name] = stats
         except Exception as e:
-            logger.warning("Stats compute failed for %s: %s", name, e)
+            logger.warning("Stats export failed for %s: %s", name, e)
 
     return all_stats
 

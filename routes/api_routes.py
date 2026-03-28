@@ -79,10 +79,7 @@ def _compute_player_stats_live(data, player_name, count=10):
         user_index = next((i for i, u in enumerate(USERS) if u["name"] == player_name), 0)
     ps = tenhouStatistics.PlayerStatistic(games=total_games, playerName=USERS[user_index])
     stats_data = json.loads(ps.json())
-    if hasattr(ps, "rank") and hasattr(ps.rank, "datas"):
-        stats_data["rankData"] = ps.rank.datas[-count:]
-    else:
-        stats_data["rankData"] = []
+    stats_data["rankData"] = ps.rank_history[-count:] if hasattr(ps, "rank_history") else []
     return stats_data
 
 

@@ -1,158 +1,169 @@
+"""
+tenhouStatistics.py — 리팩토링 v3
+
+변경사항:
+  1. Statistic → RunningStatistic (메모리 O(N) → O(1))
+  2. PlayerStatistic.__init__ 루프 → process_game() 메서드 추출
+  3. rank → 전용 필드 (rank_counts, rank_sum, rank_history)
+  4. 기존 __init__(games, playerName) 호출 100% 호환 유지
+
+[중요] dict() 출력은 리팩토링 전과 완전히 동일해야 합니다.
+       tests/verify_refactor.py로 검증하세요.
+"""
 import json
 
-class Statistic(object):
-    """None 안전 처리가 추가된 Statistic 클래스"""
+
+class RunningStatistic(object):
+    """
+    경량 통계 클래스 — raw 리스트 대신 집계값만 유지.
+    
+    기존 Statistic의 메서드를 전부 지원하되,
+    group()/groupPercent()/per2over()는 제거 (미사용).
+    """
+    __slots__ = ['count', '_sum', '_min', '_max', 
+                 'nz_count', 'nz_sum', 'bool_count', 'valid_count']
+    
     def __init__(self):
-        super(Statistic, self).__init__()
-        self.datas = list()
+        self.count = 0
+        self._sum = 0
+        self._min = float('inf')
+        self._max = float('-inf')
+        self.nz_count = 0
+        self.nz_sum = 0
+        self.bool_count = 0
+        self.valid_count = 0
 
     def add(self, data):
-        self.datas.append(data)
-
-    def max(self):
-        # None 제외하고 계산
-        valid_data = [d for d in self.datas if d is not None]
-        if not valid_data: return 0
-        return max(valid_data)
-
-    def min(self):
-        valid_data = [d for d in self.datas if d is not None]
-        if not valid_data: return 0
-        return min(valid_data)
-
-    def sum(self):
-        valid_data = [d for d in self.datas if d is not None]
-        if not valid_data: return 0
-        return sum(valid_data)
-
-    def sum_not_zero(self):
-        s = 0
-        for data in self.datas:
-            if data is not None and data != False:
-                s += data
-        return s
-
-    def len(self): return len(self.datas)
-
-    def len_not_zero(self):
-        c = 0
-        for data in self.datas:
-            if data is not None and data != False:
-                c += 1
-        return c
+        if data is None:
+            return
+        
+        self.valid_count += 1
+        
+        if data is not False and data != 0:
+            self.bool_count += 1
+            self.nz_count += 1
+            self.nz_sum += data
+        
+        numeric = data if isinstance(data, (int, float)) else (1 if data else 0)
+        self.count += 1
+        self._sum += numeric
+        if numeric < self._min:
+            self._min = numeric
+        if numeric > self._max:
+            self._max = numeric
 
     def avg(self):
-        # None 제외 평균
-        valid_data = [d for d in self.datas if d is not None]
-        if not valid_data: return 0
-        return float(sum(valid_data)) / len(valid_data)
+        return float(self._sum) / self.valid_count if self.valid_count else 0
+
+    def min(self):
+        return self._min if self.valid_count and self._min != float('inf') else 0
+
+    def max(self):
+        return self._max if self.valid_count and self._max != float('-inf') else 0
+
+    def sum(self):
+        return self._sum
+
+    def len(self):
+        return self.valid_count
+
+    def sum_not_zero(self):
+        return self.nz_sum
+
+    def len_not_zero(self):
+        return self.nz_count
 
     def avg_not_zero(self):
-        s, c = 0, 0
-        for data in self.datas:
-            # [수정됨] None이 아니고 0도 아닌 경우만 합산
-            if data is not None and data != 0:
-                s += data
-                c += 1
-        return float(s) / c if c else 0
+        return float(self.nz_sum) / self.nz_count if self.nz_count else 0
 
     def avg_bool(self):
-        if not self.datas: return 0
-        s = 0
-        valid_len = 0
-        for data in self.datas:
-            if data is not None and data != False: 
-                s += bool(data)
-            if data is not None:
-                valid_len += 1
-        
-        return float(s) / valid_len if valid_len else 0
+        return float(self.bool_count) / self.valid_count if self.valid_count else 0
 
-    def group(self):
-        temp = dict()
-        for d in self.datas: 
-            if d is not None:
-                temp[d] = temp.get(d, 0) + 1
-        return temp
 
-    def groupPercent(self):
-        temp = self.group()
-        total = len([d for d in self.datas if d is not None])
-        if total == 0: return temp
-        for key in temp: temp[key] /= float(total)
-        return temp
-    
-    def per2over(self):
-        filter = [x for x in self.datas if x is not None and x >= 2]
-        total = len([d for d in self.datas if d is not None])
-        return len(filter) / total if total else 0
+# 기존 코드 호환
+Statistic = RunningStatistic
 
 
 class PlayerStatistic(object):
+    """
+    플레이어 통계.
+    
+    사용법 1 (기존 호환):
+        ps = PlayerStatistic(games=total_games, playerName=user)
+        
+    사용법 2 (single-pass):
+        ps = PlayerStatistic(games=None, playerName=user)
+        ps.process_game(game)
+    """
     def __init__(self, games, playerName):
         super(PlayerStatistic, self).__init__()
-        self.games = games
+        
         if isinstance(playerName, dict):
             self.playerName = playerName['name']
-            aliases = playerName.get('aliases', [playerName['name']])
+            self._aliases = playerName.get('aliases', [playerName['name']])
         else:
             self.playerName = playerName
-            aliases = [playerName]
+            self._aliases = [playerName]
 
-        self.games_count = len(games)
-        self.total_rank = 0
+        # ── rank 전용 필드 ──
+        self.rank_counts = [0, 0, 0, 0, 0]  # [unused, 1위, 2위, 3위, 4위]
+        self.rank_sum = 0
+        self.rank_history = []
         
-        self.rank = Statistic()
-        self.east_rank = Statistic()
-        self.south_rank = Statistic()
-        self.west_rank = Statistic()
-        self.north_rank = Statistic()
-        self.endScore = Statistic()
-        self.minusScore = Statistic()
-        self.minusOther = Statistic()
-        self.minusOther_sum = Statistic()
+        self.wind_rank_sum = [0, 0, 0, 0]
+        self.wind_rank_count = [0, 0, 0, 0]
+
+        # ── 일반 통계 ──
+        self.endScore = RunningStatistic()
+        self.minusScore = RunningStatistic()
+        self.minusOther = RunningStatistic()
+        self.minusOther_sum = RunningStatistic()
         
-        self.dora = Statistic()
-        self.dora_outer = Statistic()
-        self.dora_inner = Statistic()
-        self.dora_inner_eff = Statistic()
-        self.dora_akai = Statistic()
+        self.dora = RunningStatistic()
+        self.dora_outer = RunningStatistic()
+        self.dora_inner = RunningStatistic()
+        self.dora_inner_eff = RunningStatistic()
+        self.dora_akai = RunningStatistic()
         
-        self.winGame = Statistic()
-        self.winGame_host = Statistic()
-        self.winGame_zimo = Statistic()
-        self.winGame_rong = Statistic()
-        self.winGame_fulu = Statistic()
-        self.winGame_richi = Statistic()
-        self.winGame_score = Statistic()
-        self.winGame_round = Statistic()
-        self.winGame_dama = Statistic()
-        self.fulu = Statistic()
-        self.fulu_winGame = Statistic()
-        self.fulu_zimo = Statistic()
-        self.fulu_rong = Statistic()
-        self.fulu_chong = Statistic()
-        self.fulu_score = Statistic()
-        self.chong = Statistic()
-        self.chong_fulu = Statistic()
-        self.chong_richi = Statistic()
-        self.chong_host = Statistic()
-        self.chong_score = Statistic()
-        self.dehost = Statistic()
-        self.dehost_score = Statistic()
-        self.otherZimo = Statistic()
-        self.otherZimo_score = Statistic()
+        self.winGame = RunningStatistic()
+        self.winGame_host = RunningStatistic()
+        self.winGame_zimo = RunningStatistic()
+        self.winGame_rong = RunningStatistic()
+        self.winGame_fulu = RunningStatistic()
+        self.winGame_richi = RunningStatistic()
+        self.winGame_score = RunningStatistic()
+        self.winGame_round = RunningStatistic()
+        self.winGame_dama = RunningStatistic()
         
-        self.richi = Statistic()
-        self.richi_score = Statistic()
-        self.richi_winGame = Statistic()
-        self.richi_zimo = Statistic()
-        self.richi_rong = Statistic()
-        self.richi_yifa = Statistic()
-        self.richi_chong = Statistic()
-        self.richi_otherZimo = Statistic()
-        self.richi_draw = Statistic()
-        self.richi_inner_dora = Statistic()
+        self.fulu = RunningStatistic()
+        self.fulu_winGame = RunningStatistic()
+        self.fulu_zimo = RunningStatistic()
+        self.fulu_rong = RunningStatistic()
+        self.fulu_chong = RunningStatistic()
+        self.fulu_score = RunningStatistic()
+        
+        self.chong = RunningStatistic()
+        self.chong_fulu = RunningStatistic()
+        self.chong_richi = RunningStatistic()
+        self.chong_host = RunningStatistic()
+        self.chong_score = RunningStatistic()
+        
+        self.dehost = RunningStatistic()
+        self.dehost_score = RunningStatistic()
+        
+        self.otherZimo = RunningStatistic()
+        self.otherZimo_score = RunningStatistic()
+        
+        self.richi = RunningStatistic()
+        self.richi_score = RunningStatistic()
+        self.richi_winGame = RunningStatistic()
+        self.richi_zimo = RunningStatistic()
+        self.richi_rong = RunningStatistic()
+        self.richi_yifa = RunningStatistic()
+        self.richi_chong = RunningStatistic()
+        self.richi_otherZimo = RunningStatistic()
+        self.richi_draw = RunningStatistic()
+        self.richi_inner_dora = RunningStatistic()
         
         self.richi_count_total = 0
         self.richi_first_sum = 0
@@ -160,162 +171,175 @@ class PlayerStatistic(object):
         self.richi_remain_sum = 0
         self.richi_fan_sum = 0
         
-        self.kuksu = 0  # 총 국 수 (복원)
-        
+        self.kuksu = 0
         self.yakus = dict()
 
-        for game in games:
-            playerIndex = game.getPlayerIndex_ByName(aliases)
-            if playerIndex == -1: continue
+        # 기존 호환: games가 주어지면 바로 계산
+        if games is not None:
+            for game in games:
+                self.process_game(game)
 
-            self.rank.add(game.players[playerIndex].rank)
-            if playerIndex == 0: self.east_rank.add(game.players[playerIndex].rank)
-            elif playerIndex == 1: self.south_rank.add(game.players[playerIndex].rank)
-            elif playerIndex == 2: self.west_rank.add(game.players[playerIndex].rank)
-            elif playerIndex == 3: self.north_rank.add(game.players[playerIndex].rank)
-            self.endScore.add(game.players[playerIndex].score)
-            self.minusScore.add(game.players[playerIndex].score < 0)
+    def process_game(self, game):
+        """단일 게임의 통계를 누적."""
+        playerIndex = game.getPlayerIndex_ByName(self._aliases)
+        if playerIndex == -1:
+            return
+
+        rank = game.players[playerIndex].rank
+        self.rank_counts[rank] += 1
+        self.rank_sum += rank
+        self.rank_history.append(rank)
+        
+        if 0 <= playerIndex <= 3:
+            self.wind_rank_sum[playerIndex] += rank
+            self.wind_rank_count[playerIndex] += 1
+        
+        self.endScore.add(game.players[playerIndex].score)
+        self.minusScore.add(game.players[playerIndex].score < 0)
+        
+        if game.logs:
+            if playerIndex in game.logs[-1].winnerIndex:
+                mo_sum = sum([pl.score < 0 for pl in game.players if pl.index != playerIndex])
+            else:
+                mo_sum = 0
+            self.minusOther.add(mo_sum > 0)
+            self.minusOther_sum.add(mo_sum)
+
+            for log in game.logs:
+                self._process_round(log, playerIndex)
+
+    def _process_round(self, log, playerIndex):
+        """단일 국(round) 처리"""
+        isDraw = log.isDraw
+        isWin = log.isWin(playerIndex)
+        isYifa = log.isYifa(playerIndex)
+        isZimo = log.isZimo(playerIndex)
+        isRong = log.isRong(playerIndex)
+        isChong = log.isChong(playerIndex)
+        isFulu = log.isFulu(playerIndex)
+        isRichi = log.isRichi(playerIndex)
+        isHost = log.isHost(playerIndex)
+        isOtherZimo = log.isOtherZimo(playerIndex)
+        isDama = log.isDama(playerIndex)
+        endRound = log.endRound(playerIndex)
+        scoreChange = sum([sc[playerIndex] for sc in log.changeScore])
+        self.kuksu += len(log.changeScore)
+        
+        if isWin:
+            if log.dora:
+                try:
+                    win_order_idx = log.winnerIndex.index(playerIndex)
+                    self.dora.add(log.dora[win_order_idx])
+                    self.dora_outer.add(log.dora_outer[win_order_idx])
+                    self.dora_inner.add(log.dora_inner[win_order_idx])
+                    self.dora_akai.add(log.dora_akai[win_order_idx])
+                except ValueError:
+                    pass
+
+        self.winGame.add(isWin)
+        if isWin:
+            self.winGame_host.add(isHost and scoreChange)
+            self.winGame_zimo.add(isZimo and scoreChange)
+            self.winGame_rong.add(isRong and scoreChange)
+            self.winGame_fulu.add(isFulu and scoreChange)
+            self.winGame_richi.add(isRichi and scoreChange)
+            self.winGame_score.add(scoreChange)
+            self.winGame_round.add(endRound)
+            self.winGame_dama.add(isDama and scoreChange)
             
-            if game.logs:
-                if playerIndex in game.logs[-1].winnerIndex:
-                    minusOther_sum = sum([pl.score < 0 for pl in game.players if pl.index != playerIndex])
-                else:
-                    minusOther_sum = 0
-                self.minusOther.add(minusOther_sum > 0)
-                self.minusOther_sum.add(minusOther_sum)
+            for i in range(len(log.changeScore)):
+                if log.changeScore[i][playerIndex] > 0:
+                    for yaku_str in log.yakus[i]:
+                        if "Dora" in yaku_str or "ドラ" in yaku_str or "Red" in yaku_str or "赤" in yaku_str:
+                            continue
+                        clean_name = yaku_str.split('(')[0]
+                        self.yakus[clean_name] = self.yakus.get(clean_name, 0) + 1
+            
+            result_data = log.logObj[4 + 3 * log.playerSum]
+            for entry in result_data[2::2]:
+                if isinstance(entry, list) and len(entry) > 3 and entry[0] == playerIndex:
+                    if '数え役満' in str(entry[3]):
+                        self.yakus['数え役満'] = self.yakus.get('数え役満', 0) + 1
+                    break
 
-                for log in game.logs:
-                    isDraw = log.isDraw
-                    isWin = log.isWin(playerIndex)
-                    isYifa = log.isYifa(playerIndex)
-                    isZimo = log.isZimo(playerIndex)
-                    isRong = log.isRong(playerIndex)
-                    isChong = log.isChong(playerIndex)
-                    isFulu = log.isFulu(playerIndex)
-                    isRichi = log.isRichi(playerIndex)
-                    isHost = log.isHost(playerIndex)
-                    isOtherZimo = log.isOtherZimo(playerIndex)
-                    isDama = log.isDama(playerIndex)
-                    endRound = log.endRound(playerIndex)
-                    scoreChange = sum([sc[playerIndex] for sc in log.changeScore])
-                    self.kuksu += len(log.changeScore)  # 총 국 수 카운팅 (복원)
-                    
-                    if isWin:
-                        # 1. 도라 통계
-                        if log.dora:
-                            try:
-                                win_order_idx = log.winnerIndex.index(playerIndex)
-                                self.dora.add(log.dora[win_order_idx])
-                                self.dora_outer.add(log.dora_outer[win_order_idx])
-                                self.dora_inner.add(log.dora_inner[win_order_idx])
-                                self.dora_akai.add(log.dora_akai[win_order_idx])
-                            except ValueError:
-                                pass
+        self.fulu.add(isFulu)
+        if isFulu:
+            self.fulu_zimo.add(isZimo and scoreChange)
+            self.fulu_rong.add(isRong and scoreChange)
+            self.fulu_chong.add(isChong and scoreChange)
+            self.fulu_score.add(scoreChange)
+            self.fulu_winGame.add(isWin and scoreChange)
+        
+        self.chong.add(isChong)
+        if isChong:
+            self.chong_fulu.add(isFulu and scoreChange)
+            self.chong_richi.add(isRichi and scoreChange)
+            self.chong_host.add(isHost and scoreChange)
+            self.chong_score.add(scoreChange)
+        
+        self.otherZimo.add(isOtherZimo)
+        if isOtherZimo:
+            self.otherZimo_score.add(scoreChange)
+            self.dehost.add(isHost)
+            if isHost:
+                self.dehost_score.add(scoreChange)
+        
+        self.richi.add(isRichi)
+        if isRichi:
+            self.richi_score.add(scoreChange)
+            self.richi_winGame.add(isWin and scoreChange)
+            self.richi_zimo.add(isZimo and scoreChange)
+            self.richi_rong.add(isRong and scoreChange)
+            self.richi_yifa.add(isYifa and scoreChange)
+            self.richi_chong.add(isChong and scoreChange)
+            self.richi_otherZimo.add(isOtherZimo and scoreChange)
+            self.richi_draw.add(isDraw and scoreChange)
+            
+            if isWin:
+                ura_count = 0
+                if log.dora:
+                    try:
+                        win_order_idx = log.winnerIndex.index(playerIndex)
+                        ura_count = log.dora_inner[win_order_idx]
+                    except (ValueError, IndexError):
+                        ura_count = 0
+                self.richi_inner_dora.add(ura_count)
+                impact_score = log.get_dora_impact_score(playerIndex)
+                self.dora_inner_eff.add(impact_score)
+            
+            r_data = log.get_richi_data(playerIndex)
+            if r_data and r_data['is_richi']:
+                self.richi_count_total += 1
+                if r_data['is_first']:
+                    self.richi_first_sum += 1
+                if r_data['is_multi_wait']:
+                    self.richi_multi_sum += 1
+                self.richi_remain_sum += r_data['remaining_count']
+                self.richi_fan_sum += r_data['expected_fan']
 
-                    self.winGame.add(isWin)
-                    if isWin:
-                        self.winGame_host.add(isHost and scoreChange)
-                        self.winGame_zimo.add(isZimo and scoreChange)
-                        self.winGame_rong.add(isRong and scoreChange)
-                        self.winGame_fulu.add(isFulu and scoreChange)
-                        self.winGame_richi.add(isRichi and scoreChange)
-                        self.winGame_score.add(scoreChange)
-                        self.winGame_round.add(endRound)
-                        self.winGame_dama.add(isDama and scoreChange)
-                        
-                        # [⭐수정됨⭐] 역(Yaku) 집계 로직
-                        for i in range(len(log.changeScore)):
-                            if log.changeScore[i][playerIndex] > 0:
-                                for yaku_str in log.yakus[i]:
-                                    # 1. 도라 항목은 역 통계에서 제외 (Dora, Ura Dora, Red Five 등)
-                                    if "Dora" in yaku_str or "ドラ" in yaku_str or "Red" in yaku_str or "赤" in yaku_str:
-                                        continue
-                                    
-                                    # 2. 이름 정제: "Riichi(1)" -> "Riichi"
-                                    clean_name = yaku_str.split('(')[0]
-                                    
-                                    # Dictionary에 집계
-                                    self.yakus[clean_name] = self.yakus.get(clean_name, 0) + 1
-                        
-                        # [복원] 헤아림 역만(数え役満) 체크
-                        result_data = log.logObj[4 + 3 * log.playerSum]
-                        for entry in result_data[2::2]:
-                            if isinstance(entry, list) and len(entry) > 3 and entry[0] == playerIndex:
-                                if '数え役満' in str(entry[3]):
-                                    self.yakus['数え役満'] = self.yakus.get('数え役満', 0) + 1
-                                break
-
-                    self.fulu.add(isFulu)
-                    if isFulu:
-                        self.fulu_zimo.add(isZimo and scoreChange)
-                        self.fulu_rong.add(isRong and scoreChange)
-                        self.fulu_chong.add(isChong and scoreChange)
-                        self.fulu_score.add(scoreChange)
-                        self.fulu_winGame.add(isWin and scoreChange)
-                    
-                    self.chong.add(isChong)
-                    if isChong:
-                        self.chong_fulu.add(isFulu and scoreChange)
-                        self.chong_richi.add(isRichi and scoreChange)
-                        self.chong_host.add(isHost and scoreChange)
-                        self.chong_score.add(scoreChange)
-                    
-                    self.otherZimo.add(isOtherZimo)
-                    if isOtherZimo:
-                        self.otherZimo_score.add(scoreChange)
-                        self.dehost.add(isHost)
-                        if isHost: self.dehost_score.add(scoreChange)
-                    
-                    self.richi.add(isRichi)
-                    if isRichi:
-                        self.richi_score.add(scoreChange)
-                        self.richi_winGame.add(isWin and scoreChange)
-                        self.richi_zimo.add(isZimo and scoreChange)
-                        self.richi_rong.add(isRong and scoreChange)
-                        self.richi_yifa.add(isYifa and scoreChange)
-                        self.richi_chong.add(isChong and scoreChange)
-                        self.richi_otherZimo.add(isOtherZimo and scoreChange)
-                        self.richi_draw.add(isDraw and scoreChange)
-                        
-                        # [⭐핵심 수정⭐] 리치 화료 시 뒷도라 개수 집계
-                        if isWin:
-                            # 1. 뒷도라 개수 (확률/개수용)
-                            ura_count = 0
-                            if log.dora:
-                                try:
-                                    # log.dora 리스트는 화료자 순서대로 정렬됨. 내 순서(idx) 찾기
-                                    win_order_idx = log.winnerIndex.index(playerIndex)
-                                    ura_count = log.dora_inner[win_order_idx]
-                                except (ValueError, IndexError):
-                                    ura_count = 0
-                            self.richi_inner_dora.add(ura_count)
-
-                            # 2. 뒷도라 점수 효율 (기존 유지)
-                            impact_score = log.get_dora_impact_score(playerIndex)
-                            self.dora_inner_eff.add(impact_score)
-                        
-                        r_data = log.get_richi_data(playerIndex)
-                        if r_data and r_data['is_richi']:
-                            self.richi_count_total += 1
-                            if r_data['is_first']: self.richi_first_sum += 1
-                            if r_data['is_multi_wait']: self.richi_multi_sum += 1
-                            self.richi_remain_sum += r_data['remaining_count']
-                            self.richi_fan_sum += r_data['expected_fan']
+    def _games_count(self):
+        return sum(self.rank_counts)
 
     def dict(self):
+        games = self._games_count()
         r_cnt = self.richi_count_total if self.richi_count_total > 0 else 1
+        
+        def _wind_avg(idx):
+            return self.wind_rank_sum[idx] / self.wind_rank_count[idx] if self.wind_rank_count[idx] else 0
+        
+        total_avg = self.rank_sum / games if games else 0
         
         return dict(
             name = self.playerName,
-            games = self.rank.len(),
+            games = games,
             kuksu = self.kuksu,
-            kuksuji = (self.endScore.avg() - 25000) / self.kuksu * self.rank.len() if self.kuksu > 0 else 0,
+            kuksuji = (self.endScore.avg() - 25000) / self.kuksu * games if self.kuksu > 0 else 0,
             
-            total = dict(avg = self.rank.avg()),
-            east = dict(avg = self.east_rank.avg()),
-            south = dict(avg = self.south_rank.avg()),
-            west = dict(avg = self.west_rank.avg()),
-            north = dict(avg = self.north_rank.avg()),
+            total = dict(avg = total_avg),
+            east = dict(avg = _wind_avg(0)),
+            south = dict(avg = _wind_avg(1)),
+            west = dict(avg = _wind_avg(2)),
+            north = dict(avg = _wind_avg(3)),
             endScore = dict(avg = self.endScore.avg(), max = self.endScore.max(), min = self.endScore.min()),
             minusScore = dict(avg = self.minusScore.avg(), sum = self.minusScore.sum()),
             minusOther = dict(avg = self.minusOther.avg(), sum = self.minusOther.sum(), plr = self.minusOther_sum.sum()),
@@ -370,10 +394,10 @@ class PlayerStatistic(object):
             richi_machi_count = dict(avg = self.richi_remain_sum / r_cnt),
             richi_fan = dict(avg = self.richi_fan_sum / r_cnt),
             
-            total_first_count = self.rank.datas.count(1),
-            total_second_count = self.rank.datas.count(2),
-            total_third_count = self.rank.datas.count(3),
-            total_fourth_count = self.rank.datas.count(4),
+            total_first_count = self.rank_counts[1],
+            total_second_count = self.rank_counts[2],
+            total_third_count = self.rank_counts[3],
+            total_fourth_count = self.rank_counts[4],
             yakus = [[self.yakus[y], y] for y in self.yakus],
         )
 
