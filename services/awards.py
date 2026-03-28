@@ -57,7 +57,24 @@ def calculate_awards(db_service, season_param):
     except Exception as e:
         logger.warning("Awards: ELO failed: %s", e)
 
-    # 2. 최다 연승
+    # 2. 최고 우마평균
+    if ranking_data:
+        with_games = [p for p in ranking_data["ranking"] if p["games"] >= dynamic_min]
+        if with_games:
+            best = max(with_games, key=lambda x: x["point_avg"])
+            sign = "+" if best["point_avg"] >= 0 else ""
+            awards.append({"title": "최고 우마평균", "icon": "uma", "winner": best["name"], "value": f'{sign}{best["point_avg"]:.1f}'})
+
+    # 3~10: 통계 기반 (순서: 국수지, 연승, 타점, 화료수지, 방총수지, 4위율, 일발율, 평균도라)
+    stat_awards_pre = [
+        ("최고 국수지", "kuksuji", True, "int"),
+    ]
+    for title, key, higher_is_better, fmt in stat_awards_pre:
+        best_name, best_val = _find_best_stat(stats, key, higher_is_better, dynamic_min)
+        if best_name is not None:
+            awards.append({"title": title, "icon": key.split(".")[0], "winner": best_name, "value": _format_award_value(best_val, fmt)})
+
+    # 4. 최다 연승
     try:
         if data:
             sorted_data = sorted(data, key=lambda x: x.get("title", ["", ""])[1] if len(x.get("title", [])) > 1 else "")
@@ -91,49 +108,45 @@ def calculate_awards(db_service, season_param):
     except Exception as e:
         logger.warning("Awards: streak failed: %s", e)
 
-    # 3. 최다 대국상
-    if ranking_data:
-        ranked = sorted(ranking_data["ranking"], key=lambda x: -x["games"])
-        if ranked and ranked[0]["games"] > 0:
-            awards.append({"title": "최다 대국상", "icon": "games", "winner": ranked[0]["name"], "value": f'{ranked[0]["games"]}국'})
-
-    # 4. 최고 우마평균
-    if ranking_data:
-        with_games = [p for p in ranking_data["ranking"] if p["games"] >= dynamic_min]
-        if with_games:
-            best = max(with_games, key=lambda x: x["point_avg"])
-            sign = "+" if best["point_avg"] >= 0 else ""
-            awards.append({"title": "최고 우마평균", "icon": "uma", "winner": best["name"], "value": f'{sign}{best["point_avg"]:.1f}'})
-
-    # 5~11: 통계 기반
-    stat_awards = [
-        ("최고 승률", "first_rate", True, "percent"),
-        ("최고 국수지", "kuksuji", True, "int"),
+    # 5~10: 나머지 통계 기반
+    stat_awards_post = [
         ("최대 타점", "winGame_score.max", True, "int"),
         ("최고 화료수지", "winGame_score.avg", True, "int"),
         ("최소 방총수지", "_chong_combined", False, "int"),
+        ("최소 4위율", "_fourth_rate", False, "percent"),
         ("최고 일발율", "richi_yifa.per", True, "percent_raw"),
         ("최고 평균도라", "dora.avg", True, "float"),
     ]
-
-    for title, key, higher_is_better, fmt in stat_awards:
-        best_name, best_val = None, None
-        for name, ps in stats.items():
-            games = ps.get("games", 0)
-            if games < dynamic_min:
-                continue
-            if key == "_chong_combined":
-                cr = _get_nested(ps, "chong.avg")
-                cs = _get_nested(ps, "chong_score.avg")
-                val = cr * abs(cs) if cr is not None and cs is not None else None
-            else:
-                val = _get_nested(ps, key)
-            if val is None or not isinstance(val, (int, float)):
-                continue
-            if best_val is None or (higher_is_better and val > best_val) or (not higher_is_better and val < best_val):
-                best_name, best_val = name, val
+    for title, key, higher_is_better, fmt in stat_awards_post:
+        best_name, best_val = _find_best_stat(stats, key, higher_is_better, dynamic_min)
         if best_name is not None:
             awards.append({"title": title, "icon": key.split(".")[0], "winner": best_name, "value": _format_award_value(best_val, fmt)})
+
+    return awards
+
+
+def _find_best_stat(stats, key, higher_is_better, dynamic_min):
+    """통계 기반 어워드 최고/최저 찾기"""
+    best_name, best_val = None, None
+    for name, ps in stats.items():
+        games = ps.get("games", 0)
+        if games < dynamic_min:
+            continue
+        if key == "_chong_combined":
+            cr = _get_nested(ps, "chong.avg")
+            cs = _get_nested(ps, "chong_score.avg")
+            val = cr * abs(cs) if cr is not None and cs is not None else None
+        elif key == "_fourth_rate":
+            total = ps.get("games", 0)
+            fourth = ps.get("total_fourth_count", 0)
+            val = fourth / total if total > 0 else None
+        else:
+            val = _get_nested(ps, key)
+        if val is None or not isinstance(val, (int, float)):
+            continue
+        if best_val is None or (higher_is_better and val > best_val) or (not higher_is_better and val < best_val):
+            best_name, best_val = name, val
+    return best_name, best_val
 
     return awards
 
