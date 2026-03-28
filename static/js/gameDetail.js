@@ -187,8 +187,8 @@ function renderRoundsList(data) {
 
     // 결과 정보 라인 (좌측)
     let resultLine = resultBadge;
-    if (winnerName) resultLine += ` <span style="font-weight:500;color:var(--text-primary);">${winnerName}</span>`;
-    if (hanFuStr) resultLine += ` <span style="font-size:12px;color:var(--text-tertiary);">${hanFuStr}</span>`;
+    if (winnerName) resultLine += `<span style="font-weight:500;color:var(--text-primary);">${winnerName}</span>`;
+    if (hanFuStr) resultLine += `<span style="font-size:12px;color:var(--text-tertiary);">${hanFuStr}</span>`;
     if (tierBadge) resultLine += tierBadge;
 
     return `<div class="round-block">
