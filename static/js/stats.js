@@ -201,9 +201,20 @@ document.addEventListener("DOMContentLoaded", () => {
   function showPageEmpty(msg) {
     document.querySelector("#statsTable tbody").innerHTML = `<tr><td colspan="2" class="empty-state">${msg}</td></tr>`;
     document.getElementById("streakSection").style.display = "none";
+    document.getElementById("profileSection").style.display = "none";
+    if (radarChart) { radarChart.destroy(); radarChart = null; }
+    if (rankChart) { rankChart.destroy(); rankChart = null; }
+    const yakuTbody = document.querySelector("#yakuTable tbody");
+    if (yakuTbody) yakuTbody.innerHTML = "";
   }
   function showPageError(msg) {
     document.querySelector("#statsTable tbody").innerHTML = `<tr><td colspan="2" class="error-state">${msg}</td></tr>`;
+    document.getElementById("streakSection").style.display = "none";
+    document.getElementById("profileSection").style.display = "none";
+    if (radarChart) { radarChart.destroy(); radarChart = null; }
+    if (rankChart) { rankChart.destroy(); rankChart = null; }
+    const yakuTbody = document.querySelector("#yakuTable tbody");
+    if (yakuTbody) yakuTbody.innerHTML = "";
   }
 
   // 데이터 로드
