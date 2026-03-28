@@ -15,63 +15,66 @@
   .player-card .rank-2 { color: var(--text-secondary); }
   .player-card .rank-3 { color: #a16207; }
   .player-card .rank-4 { color: var(--color-worst); }
-  .round-row {
-    display: flex;
-    gap: 4px;
-    align-items: flex-start;
-    padding: 8px 0;
-    border-bottom: 1px solid var(--border-light);
-    font-size: 13px;
-  }
-  .round-left {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-  }
-  .round-label {
-    font-weight: 500;
-    color: var(--text-secondary);
-    margin-bottom: 2px;
-  }
-  .round-scores {
-    display: flex;
-    gap: 4px;
+
+  /* 국별 결과 */
+  .round-block { border-bottom: 1px solid var(--border-light); padding: 10px 0; }
+  .round-header { font-size: 13px; font-weight: 600; color: var(--text-heading); margin-bottom: 6px; }
+  .round-body { display: flex; align-items: center; gap: 12px; }
+  .round-result-info {
     flex-shrink: 0;
-    margin-left: auto;
+    min-width: 140px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
   }
-  .round-score {
+  .round-result-line { font-size: 14px; font-weight: 500; color: var(--text-primary); }
+  .round-result-sub { font-size: 12px; color: var(--text-tertiary); margin-top: 1px; }
+  .round-players {
+    display: flex;
+    gap: 4px;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+  .round-pcol {
     width: 80px;
     text-align: center;
-    flex-shrink: 0;
   }
+  .round-pcol .pname { font-size: 11px; color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .round-pcol .pscore { font-size: 13px; font-weight: 600; }
+  .round-yakus { font-size: 11px; color: var(--color-accent); margin-top: 4px; }
+
   .result-badge {
     display: inline-block;
     padding: 2px 8px;
     border-radius: 10px;
     font-size: 11px;
     font-weight: 600;
+    vertical-align: middle;
   }
   .result-tsumo { background: #dbeafe; color: #1d4ed8; }
   .result-ron { background: #fef3c7; color: #92400e; }
   .result-draw { background: var(--bg-table-header); color: var(--text-tertiary); }
   .result-win { background: #dcfce7; color: #166534; }
+  .tier-badge { font-size: 11px; font-weight: 600; margin-left: 6px; }
+  .tier-yakuman { color: #dc2626; }
+  .tier-sanbaiman { color: #7c3aed; }
+  .tier-baiman { color: #2563eb; }
+  .tier-haneman { color: #059669; }
+  .tier-mangan { color: #d97706; }
   [data-theme="dark"] .result-tsumo { background: #1e3a5f; color: #93c5fd; }
   [data-theme="dark"] .result-ron { background: #451a03; color: #fcd34d; }
   [data-theme="dark"] .result-win { background: #14532d; color: #86efac; }
   .viewer-links { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
   .viewer-links a {
-    padding: 8px 16px;
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 500;
-    text-decoration: none;
-    border: 1px solid var(--border-input);
-    color: var(--text-link);
-    transition: all 0.2s;
+    padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 500;
+    text-decoration: none; border: 1px solid var(--border-input); color: var(--text-link); transition: all 0.2s;
   }
-  .viewer-links a:hover {
-    background: var(--bg-card-hover);
-    border-color: var(--color-accent);
+  .viewer-links a:hover { background: var(--bg-card-hover); border-color: var(--color-accent); }
+  @media (max-width: 600px) {
+    .round-body { flex-direction: column; align-items: flex-start; }
+    .round-players { margin-left: 0; width: 100%; justify-content: space-between; }
+    .round-pcol { width: auto; flex: 1; }
+    .round-result-info { min-width: auto; }
   }
 </style>
 {% endblock %}

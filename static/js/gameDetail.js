@@ -139,43 +139,67 @@ function renderRoundsList(data) {
 
     const winnerName = r.winner >= 0 && r.winner < names.length ? names[r.winner] : "";
 
-    // 역 표시
-    let yakuStr = "";
+    // 판수/부수/등급 정보
+    let hanFuStr = "";
+    let tierBadge = "";
+    if (r.yakus && r.yakus.length > 0) {
+      const y0 = r.yakus[0];
+      if (y0.tier) {
+        const tierClass = {"역만":"tier-yakuman","삼배만":"tier-sanbaiman","배만":"tier-baiman","하네만":"tier-haneman","만관":"tier-mangan"}[y0.tier] || "";
+        tierBadge = ` <span class="tier-badge ${tierClass}">${y0.tier}</span>`;
+      }
+      if (y0.han && y0.fu) {
+        hanFuStr = `${y0.han}판 ${y0.fu}부`;
+      } else if (y0.han) {
+        hanFuStr = `${y0.han}판`;
+      }
+    }
+
+    // 역 + 도라 (하단 행)
+    let yakuLine = "";
     if (r.yakus && r.yakus.length > 0) {
       const yakuNames = r.yakus.flatMap(y => y.yakus).map(y => YAKU_KR[y] || y);
-      // 도라 정보 합산
       const doraMerged = {};
       r.yakus.forEach(y => {
         if (y.dora) {
           for (const [k, v] of Object.entries(y.dora)) {
-            doraMerged[k] = (doraMerged[k] || 0) + v;
+            if (v > 0) doraMerged[k] = (doraMerged[k] || 0) + v;
           }
         }
       });
       const doraParts = Object.entries(doraMerged).map(([k, v]) => `${k} ${v}`);
       const allParts = [...yakuNames, ...doraParts];
       if (allParts.length > 0) {
-        yakuStr = `<div style="font-size:11px;color:var(--color-accent);margin-top:2px;">${allParts.join(" / ")}</div>`;
+        yakuLine = `<div class="round-yakus">${allParts.join(" / ")}</div>`;
       }
     }
 
-    const scores = names.map((name, i) => {
+    // 플레이어 점수 그리드 (우측)
+    const playerCols = names.map((name, i) => {
       const change = r.scoreChanges[i] || 0;
       const color = change > 0 ? "var(--color-best)" : change < 0 ? "var(--color-worst)" : "var(--text-tertiary)";
       const sign = change > 0 ? "+" : "";
-      return `<div class="round-score">
-        <div style="font-size:11px;color:var(--text-tertiary);">${name}</div>
-        <div style="color:${color};font-weight:${change !== 0 ? 600 : 400};font-size:13px;">${sign}${change.toLocaleString()}</div>
+      return `<div class="round-pcol">
+        <div class="pname">${name}</div>
+        <div class="pscore" style="color:${color};">${sign}${change.toLocaleString()}</div>
       </div>`;
     }).join("");
 
-    return `<div class="round-row">
-      <div class="round-left">
-        <div class="round-label">${r.label}</div>
-        <div>${resultBadge}${winnerName ? ` <span style="font-size:12px;color:var(--text-secondary);">${winnerName}</span>` : ""}</div>
-        ${yakuStr}
+    // 결과 정보 라인 (좌측)
+    let resultLine = resultBadge;
+    if (winnerName) resultLine += ` <span style="font-weight:500;color:var(--text-primary);">${winnerName}</span>`;
+    if (hanFuStr) resultLine += ` <span style="font-size:12px;color:var(--text-tertiary);">${hanFuStr}</span>`;
+    if (tierBadge) resultLine += tierBadge;
+
+    return `<div class="round-block">
+      <div class="round-header">${r.label}</div>
+      <div class="round-body">
+        <div class="round-result-info">
+          <div class="round-result-line">${resultLine}</div>
+        </div>
+        <div class="round-players">${playerCols}</div>
       </div>
-      <div class="round-scores">${scores}</div>
+      ${yakuLine}
     </div>`;
   }).join("");
 }

@@ -387,9 +387,38 @@ def get_game_detail(ref):
 
             # 역 정보 추출
             yakus_info = []
+            han_fu_info = []
             if not rnd.isDraw and rnd.yakus:
+                # 판수/부수 추출 (raw result block에서)
+                try:
+                    result_block = rnd.logObj[4 + 3 * player_count]
+                    for entry in result_block[2::2]:
+                        if isinstance(entry, list) and len(entry) > 3:
+                            score_str = str(entry[3])
+                            han_val = 0
+                            fu_val = 0
+                            tier = ""
+                            han_m = re.findall(r'(\d+)飜', score_str)
+                            if han_m:
+                                han_val = int(han_m[0])
+                            fu_m = re.findall(r'(\d+)符', score_str)
+                            if fu_m:
+                                fu_val = int(fu_m[0])
+                            if '役満' in score_str:
+                                tier = "역만"
+                            elif '三倍満' in score_str:
+                                tier = "삼배만"
+                            elif '倍満' in score_str:
+                                tier = "배만"
+                            elif '跳満' in score_str:
+                                tier = "하네만"
+                            elif '満貫' in score_str:
+                                tier = "만관"
+                            han_fu_info.append({"han": han_val, "fu": fu_val, "tier": tier})
+                except Exception:
+                    pass
+
                 for yi, yaku_list in enumerate(rnd.yakus):
-                    # 화료자 시트 찾기
                     win_seat = -1
                     for si in range(player_count):
                         if yi < len(rnd.changeScore) and si < len(rnd.changeScore[yi]) and rnd.changeScore[yi][si] > 0:
@@ -399,7 +428,6 @@ def get_game_detail(ref):
                     dora_counts = {}
                     for y in yaku_list:
                         if "Dora" in y or "ドラ" in y or "Red" in y or "赤" in y:
-                            # 도라 개수 추출
                             nums = re.findall(r"\d+", y)
                             val = int(nums[0]) if nums else 1
                             if "Ura" in y or "裏" in y:
@@ -410,8 +438,11 @@ def get_game_detail(ref):
                                 dora_counts["도라"] = dora_counts.get("도라", 0) + val
                             continue
                         cleaned.append(y.split("(")[0])
+                    # 0인 도라 제거
+                    dora_counts = {k: v for k, v in dora_counts.items() if v > 0}
+                    hf = han_fu_info[yi] if yi < len(han_fu_info) else {}
                     if cleaned or dora_counts:
-                        yakus_info.append({"seat": win_seat, "yakus": cleaned, "dora": dora_counts})
+                        yakus_info.append({"seat": win_seat, "yakus": cleaned, "dora": dora_counts, "han": hf.get("han", 0), "fu": hf.get("fu", 0), "tier": hf.get("tier", "")})
 
             rounds.append({
                 "label": round_label,
