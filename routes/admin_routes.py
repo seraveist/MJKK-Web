@@ -9,6 +9,7 @@ import datetime
 from functools import wraps
 from flask import Blueprint, jsonify, request, render_template, current_app, Response
 import config.users as users_module
+from services.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
@@ -77,6 +78,7 @@ def manage_user():
 
 @admin_bp.route("/api/backup", methods=["POST"])
 @require_admin
+@limiter.limit("3 per minute")
 def backup_database():
     """게임 로그 + 유저 설정을 JSON으로 export"""
     db = _get_db()

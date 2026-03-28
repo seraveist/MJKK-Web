@@ -74,6 +74,14 @@ def create_app(config=None):
     except ImportError:
         logger.info("flask-compress not installed, skipping compression")
 
+    # [개선] flask-limiter
+    try:
+        from services.rate_limit import limiter
+        limiter.init_app(app)
+        logger.info("flask-limiter enabled (200/min default)")
+    except Exception as e:
+        logger.info("flask-limiter not available: %s", e)
+
     # DB 서비스 초기화
     db_service = DatabaseService(config)
     db_service.connect()

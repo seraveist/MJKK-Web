@@ -12,6 +12,7 @@ from config.users import USERS, find_user_index, find_user_by_alias
 from services.ranking import calculate_ranking
 from services.cache import cache, make_cache_key
 from services.precompute import get_precomputed_stats, precompute_for_season
+from services.rate_limit import limiter
 from src import tenhouLog, tenhouStatistics
 
 logger = logging.getLogger(__name__)
@@ -172,6 +173,7 @@ def get_total_stats_api():
 # ==================================================================
 
 @api_bp.route("/admin/precompute", methods=["POST"])
+@limiter.limit("2 per minute")
 def trigger_precompute():
     from services.precompute import precompute_all_seasons
     db = _get_db()
@@ -567,6 +569,7 @@ def get_matchup():
 # ==================================================================
 
 @api_bp.route("/api/elo", methods=["GET"])
+@limiter.limit("30 per minute")
 def get_elo():
     db = _get_db()
     try:
@@ -890,6 +893,7 @@ def get_profile(player_name):
 # ==================================================================
 
 @api_bp.route("/api/simulate", methods=["GET"])
+@limiter.limit("20 per minute")
 def simulate():
     db = _get_db()
     try:
@@ -934,6 +938,7 @@ def simulate():
 # ==================================================================
 
 @api_bp.route("/api/report", methods=["GET"])
+@limiter.limit("10 per minute")
 def get_season_report():
     db = _get_db()
     try:
@@ -1022,6 +1027,7 @@ def get_comments(ref):
 
 
 @api_bp.route("/api/comments/<path:ref>", methods=["POST"])
+@limiter.limit("20 per minute")
 def add_comment(ref):
     db = _get_db()
     try:
@@ -1085,6 +1091,7 @@ def get_settings():
 
 
 @api_bp.route("/api/settings", methods=["POST"])
+@limiter.limit("5 per minute")
 def update_settings():
     db = _get_db()
     pw = current_app.config["APP_CONFIG"].UPLOAD_PASSWORD
