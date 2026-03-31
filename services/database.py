@@ -121,26 +121,21 @@ class DatabaseService:
 
     def insert_game_log(self, game_log):
         try:
-            # 2차 중복 검사: 동일 날짜 + 동일 참가자 조합
-            names = game_log.get("name", [])
-            title = game_log.get("title", [])
-            date = title[1] if len(title) > 1 else None
-            if date and names:
-                sorted_names = sorted(names)
-                existing = self._collection.find_one({
-                    "title.1": date,
-                    "name": {"$all": sorted_names, "$size": len(sorted_names)},
-                })
-                if existing:
-                    return False
-
+            ref = game_log.get("ref")
+            if not ref:
+                raise ValueError("게임 로그에 'ref' 값이 없습니다.")
+            if self.find_log_by_ref(ref):
+                return False
+    
             self._collection.insert_one(game_log)
+            cache.clear()
+            logger.info("Game log inserted, cache cleared. ref=%s", ref)
             return True
         except Exception as e:
             if "duplicate key" in str(e).lower() or "E11000" in str(e):
                 return False
             raise
-
+            
     def find_log_by_ref(self, ref):
         return self._collection.find_one({"ref": ref}, {"_id": 0})
 
