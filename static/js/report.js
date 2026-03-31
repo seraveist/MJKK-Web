@@ -75,7 +75,9 @@ async function loadReport() {
       html += `<div class="report-section"><h2>역만 / 삼배만 기록</h2>`;
       data.highlights.forEach(h => {
         const cls = h.tier === "역만" ? "hl-yakuman" : "hl-sanbaiman";
-        html += `<div class="hl-item"><span class="hl-date">${h.date}</span><span class="hl-badge ${cls}">${h.tier}</span><span style="font-weight:500;">${h.player}</span></div>`;
+        const yakuStr = h.tier === "역만" && h.yakus && h.yakus.length > 0 ? ` <span style="font-size:11px;color:var(--color-accent);">(${h.yakus.join(", ")})</span>` : "";
+        const detailBtn = h.ref ? ` <a href="/games/${h.ref}" style="font-size:11px;color:var(--text-link);text-decoration:none;margin-left:4px;">상세 →</a>` : "";
+        html += `<div class="hl-item"><span class="hl-date">${h.date}</span><span class="hl-badge ${cls}">${h.tier}</span><span style="font-weight:500;">${h.player}</span>${yakuStr}${detailBtn}</div>`;
       });
       html += `</div>`;
     }

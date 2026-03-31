@@ -264,13 +264,15 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
       document.getElementById("yakumanSection").style.display = "";
-      document.getElementById("yakumanTimeline").innerHTML = data.history.map(h =>
-        `<div class="tl-item">
+      document.getElementById("yakumanTimeline").innerHTML = data.history.map(h => {
+        const yakuStr = h.tier === "역만" && h.yakus && h.yakus.length > 0 ? ` <span style="font-size:11px;color:var(--color-accent);">(${h.yakus.join(", ")})</span>` : "";
+        const detailBtn = h.ref ? ` <a href="/games/${h.ref}" style="font-size:11px;color:var(--text-link);text-decoration:none;margin-left:4px;">상세 →</a>` : "";
+        return `<div class="tl-item">
           <span class="tl-date">${h.date}</span>
           <span class="tl-badge ${h.tier === "역만" ? "tl-yakuman" : "tl-sanbaiman"}">${h.tier}</span>
-          <span style="font-weight:500;color:var(--text-primary);">${h.player}</span>
-        </div>`
-      ).join("");
+          <span style="font-weight:500;color:var(--text-primary);">${h.player}</span>${yakuStr}${detailBtn}
+        </div>`;
+      }).join("");
     } catch (e) { console.error("Yakuman history load error:", e); }
   }
 

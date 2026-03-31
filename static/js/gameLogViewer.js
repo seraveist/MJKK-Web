@@ -1,12 +1,15 @@
 /**
  * gameLogViewer.js — 대국 기록 (v3)
- * - 페이지네이션
- * - 배만/삼배만/역만 배지
- * - 상세 링크
+ * - 페이지네이션, 배만/삼배만/역만 배지
+ * - [신규] 날짜 구간 + 유저 필터
  */
 let currentSeason = window.config ? window.config.season : "all";
 let currentPage = 1;
 const PER_PAGE = 30;
+let seasonDates = { start: "", end: "" };
+let filterDateFrom = "";
+let filterDateTo = "";
+let filterPlayer = "";
 
 const urlSeason = new URLSearchParams(location.search).get("season");
 if (urlSeason) { currentSeason = urlSeason; syncTabUI(currentSeason); }
@@ -25,8 +28,7 @@ document.querySelectorAll(".season-tabs .tab").forEach(tab => {
     this.classList.add("active");
     currentSeason = this.dataset.season;
     currentPage = 1;
-    updateURL();
-    loadGameLogs();
+    resetFilter();
   });
 });
 
@@ -38,13 +40,25 @@ window.addEventListener("popstate", () => {
 });
 
 function updateURL() {
-  const p = new URLSearchParams(location.search);
+  const p = new URLSearchParams();
   p.set("season", currentSeason);
-  if (currentPage > 1) p.set("page", currentPage); else p.delete("page");
+  if (currentPage > 1) p.set("page", currentPage);
   history.pushState({}, "", `?${p}`);
 }
 
-document.addEventListener("DOMContentLoaded", () => loadGameLogs());
+document.addEventListener("DOMContentLoaded", async () => {
+  try {
+    const res = await fetch("/stats/all");
+    const data = await res.json();
+    const sel = document.getElementById("playerFilter");
+    (data.allPlayers || []).forEach(p => {
+      const o = document.createElement("option");
+      o.value = p; o.textContent = p;
+      sel.appendChild(o);
+    });
+  } catch (e) { /* ignore */ }
+  loadGameLogs();
+});
 
 async function loadGameLogs() {
   document.getElementById("loading").style.display = "flex";
@@ -52,12 +66,27 @@ async function loadGameLogs() {
   const info = document.getElementById("logInfo");
 
   try {
-    const res = await fetch(`/api/gamelogs?season=${currentSeason}&page=${currentPage}&per_page=${PER_PAGE}`);
+    let url = `/api/gamelogs?season=${currentSeason}&page=${currentPage}&per_page=${PER_PAGE}`;
+    if (filterDateFrom) url += `&date_from=${filterDateFrom}`;
+    if (filterDateTo) url += `&date_to=${filterDateTo}`;
+    if (filterPlayer) url += `&player=${encodeURIComponent(filterPlayer)}`;
+
+    const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
 
+    if (data.season_dates) {
+      seasonDates = data.season_dates;
+      const fromEl = document.getElementById("dateFrom");
+      const toEl = document.getElementById("dateTo");
+      if (!filterDateFrom && seasonDates.start) fromEl.value = seasonDates.start;
+      if (!filterDateTo && seasonDates.end) toEl.value = seasonDates.end;
+      if (seasonDates.start) { fromEl.min = seasonDates.start; toEl.min = seasonDates.start; }
+      if (seasonDates.end) { fromEl.max = seasonDates.end; toEl.max = seasonDates.end; }
+    }
+
     if (data.error) {
-      tbody.innerHTML = `<tr><td colspan="7" class="empty-state">${data.error === "No game data found" ? "이 시즌의 대국 데이터가 없습니다." : data.error}</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" class="empty-state">${data.error === "No game data found" ? "이 시즌의 대국 데이터가 없습니다." : data.error}</td></tr>`;
       info.textContent = "";
       document.getElementById("pagination").innerHTML = "";
       return;
@@ -68,7 +97,7 @@ async function loadGameLogs() {
     info.textContent = `총 ${pg.total || logs.length}국 (${pg.page || 1}/${pg.total_pages || 1} 페이지)`;
 
     if (logs.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7" class="empty-state">대국 기록이 없습니다.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6" class="empty-state">대국 기록이 없습니다.</td></tr>';
       document.getElementById("pagination").innerHTML = "";
       return;
     }
@@ -78,7 +107,6 @@ async function loadGameLogs() {
 
     logs.forEach(game => {
       const row = document.createElement("tr");
-
       const tdDate = document.createElement("td");
       tdDate.textContent = game.date || "-";
       tdDate.style.whiteSpace = "nowrap";
@@ -92,19 +120,17 @@ async function loadGameLogs() {
         if (players[i]) {
           const p = players[i];
           let badge = "";
-          // 배만/삼배만/역만 배지
-          for (const [pName, tier] of Object.entries(bigHands)) {
+          for (const [pName, bInfo] of Object.entries(bigHands)) {
             if (p.name === pName || (p.name && pName && p.name.includes(pName))) {
+              const tier = typeof bInfo === "string" ? bInfo : bInfo.tier;
               const cls = tierBadge[tier] || "";
               badge = ` <span class="big-hand-badge ${cls}">${tier}</span>`;
               break;
             }
           }
           td.innerHTML = `<span style="font-weight:500;">${p.name}</span>${badge}<br>` +
-            `<span style="font-size:11px;color:var(--text-tertiary);">${p.score}` +
-            `<span style="${p.point >= 0 ? "color:var(--color-best)" : "color:var(--color-worst)"}">(${p.point >= 0 ? "+" : ""}${p.point.toFixed(1)})</span></span>`;
-        } else {
-          td.textContent = "-";
+            `<span style="font-size:12px;color:${p.score >= 0 ? "var(--color-best)" : "var(--color-worst)"};">${p.score >= 0 ? "+" : ""}${p.score.toLocaleString()}</span>` +
+            `<span style="font-size:11px;color:var(--text-tertiary);margin-left:4px;">(${p.point >= 0 ? "+" : ""}${p.point.toFixed(1)})</span>`;
         }
         row.appendChild(td);
       }
@@ -129,16 +155,45 @@ async function loadGameLogs() {
       tbody.appendChild(row);
     });
 
-    // 페이지네이션 UI
     renderPagination(pg);
 
   } catch (e) {
     console.error("Error:", e);
-    tbody.innerHTML = '<tr><td colspan="7" class="error-state">데이터를 불러오는 중 오류가 발생했습니다.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="error-state">데이터를 불러오는 중 오류가 발생했습니다.</td></tr>';
     info.textContent = "";
   } finally {
     document.getElementById("loading").style.display = "none";
   }
+}
+
+function applyFilter() {
+  const fromEl = document.getElementById("dateFrom");
+  const toEl = document.getElementById("dateTo");
+  let from = fromEl.value;
+  let to = toEl.value;
+
+  if (seasonDates.start && from && from < seasonDates.start) { from = seasonDates.start; fromEl.value = from; }
+  if (seasonDates.end && to && to > seasonDates.end) { to = seasonDates.end; toEl.value = to; }
+  if (from && to && from > to) { from = ""; to = ""; fromEl.value = ""; toEl.value = ""; }
+
+  filterDateFrom = from;
+  filterDateTo = to;
+  filterPlayer = document.getElementById("playerFilter").value;
+  currentPage = 1;
+  updateURL();
+  loadGameLogs();
+}
+
+function resetFilter() {
+  filterDateFrom = "";
+  filterDateTo = "";
+  filterPlayer = "";
+  document.getElementById("dateFrom").value = "";
+  document.getElementById("dateTo").value = "";
+  document.getElementById("playerFilter").value = "";
+  currentPage = 1;
+  updateURL();
+  loadGameLogs();
 }
 
 function renderPagination(pg) {
@@ -147,13 +202,11 @@ function renderPagination(pg) {
 
   let html = "";
   if (pg.page > 1) html += `<button class="pg-btn" onclick="goPage(${pg.page - 1})">이전</button>`;
-
   const start = Math.max(1, pg.page - 2);
   const end = Math.min(pg.total_pages, pg.page + 2);
   for (let i = start; i <= end; i++) {
     html += `<button class="pg-btn${i === pg.page ? " pg-active" : ""}" onclick="goPage(${i})">${i}</button>`;
   }
-
   if (pg.page < pg.total_pages) html += `<button class="pg-btn" onclick="goPage(${pg.page + 1})">다음</button>`;
   container.innerHTML = html;
 }

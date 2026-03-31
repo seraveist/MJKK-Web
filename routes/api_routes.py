@@ -216,12 +216,29 @@ def get_game_logs():
         season_param = request.args.get("season", "all")
         page = int(request.args.get("page", "1"))
         per_page = int(request.args.get("per_page", "30"))
+        date_from = request.args.get("date_from", "")
+        date_to = request.args.get("date_to", "")
+        player_filter = request.args.get("player", "")
 
         data = db.fetch_game_logs(season_param, lightweight=False)
         if not data:
             return jsonify({"error": "No game data found"}), 404
 
         sorted_data = sorted(data, key=lambda x: x.get("title", ["", ""])[1], reverse=True)
+
+        # 날짜 필터
+        if date_from:
+            sorted_data = [d for d in sorted_data if (d.get("title", ["", ""])[1] if len(d.get("title", [])) > 1 else "") >= date_from]
+        if date_to:
+            sorted_data = [d for d in sorted_data if (d.get("title", ["", ""])[1] if len(d.get("title", [])) > 1 else "") <= date_to]
+
+        # 유저 필터
+        if player_filter:
+            user = find_user_by_alias(USERS, player_filter) or next((u for u in USERS if u["name"] == player_filter), None)
+            if user:
+                aliases = set(user.get("aliases", [player_filter]))
+                sorted_data = [d for d in sorted_data if any(n in aliases for n in d.get("name", []))]
+
         total = len(sorted_data)
         total_pages = max(1, (total + per_page - 1) // per_page)
         page = max(1, min(page, total_pages))
@@ -255,6 +272,9 @@ def get_game_logs():
                 "big_hands": big_hands,
             })
 
+        # 시즌 날짜 범위 계산
+        season_dates = _get_season_dates(db, season_param)
+
         return jsonify({
             "logs": logs,
             "pagination": {
@@ -263,6 +283,7 @@ def get_game_logs():
                 "total": total,
                 "total_pages": total_pages,
             },
+            "season_dates": season_dates,
         })
 
     except ValueError as e:
@@ -273,16 +294,18 @@ def get_game_logs():
 
 
 def _detect_big_hands(game_log):
-    """대국에서 배만/삼배만/역만 감지. { playerName: "역만"|"삼배만"|"배만" }"""
+    """대국에서 배만/삼배만/역만 감지. { playerName: {"tier": ..., "yakus": [...]} }"""
     names = game_log.get("name", [])
     results = {}
+
+    YAKU_KR = {"国士無双":"국사무쌍","四暗刻":"스안커","大三元":"대삼원","小四喜":"소사희","大四喜":"대사희","字一色":"자일색","緑一色":"녹일색","清老頭":"청노두","九蓮宝燈":"구련보등","天和":"천화","地和":"지화","数え役満":"헤아림 역만","Kokushi Musou":"국사무쌍","Suuankou":"스안커","Daisangen":"대삼원","Shousuushii":"소사희","Daisuushii":"대사희","Tsuuiisou":"자일색","Ryuuiisou":"녹일색","Chinroutou":"청노두","Chuuren Poutou":"구련보등"}
 
     try:
         parsed = tenhouLog.game(game_log)
         for rnd in parsed.logs:
             if rnd.isDraw:
                 continue
-            for sc_arr in rnd.changeScore:
+            for yi, sc_arr in enumerate(rnd.changeScore):
                 for seat in range(len(names)):
                     if seat >= len(sc_arr):
                         continue
@@ -304,8 +327,17 @@ def _detect_big_hands(game_log):
                     if tier:
                         tier_rank = {"배만": 1, "삼배만": 2, "역만": 3}
                         existing = results.get(display_name)
-                        if not existing or tier_rank.get(tier, 0) > tier_rank.get(existing, 0):
-                            results[display_name] = tier
+                        if not existing or tier_rank.get(tier, 0) > tier_rank.get(existing.get("tier"), 0):
+                            # 역만일 때 역 이름 추출
+                            yaku_names = []
+                            if tier == "역만" and yi < len(rnd.yakus):
+                                for y in rnd.yakus[yi]:
+                                    clean = y.split("(")[0]
+                                    if "Dora" in y or "ドラ" in y or "Red" in y or "赤" in y:
+                                        continue
+                                    kr = YAKU_KR.get(clean, clean)
+                                    yaku_names.append(kr)
+                            results[display_name] = {"tier": tier, "yakus": yaku_names}
     except Exception as e:
         logger.warning("Big hand detection failed: %s", e)
 
@@ -685,9 +717,13 @@ def get_yakuman_history():
             title = game_log.get("title", ["", ""])
             date = title[1] if len(title) > 1 else ""
             big = _detect_big_hands(game_log)
-            for player, tier in big.items():
+            for player, info in big.items():
+                tier = info["tier"]
                 if tier in ("삼배만", "역만"):
-                    history.append({"date": date, "player": player, "tier": tier, "ref": game_log.get("ref", "")})
+                    entry = {"date": date, "player": player, "tier": tier, "ref": game_log.get("ref", "")}
+                    if tier == "역만" and info.get("yakus"):
+                        entry["yakus"] = info["yakus"]
+                    history.append(entry)
 
         history.sort(key=lambda x: x["date"], reverse=True)
         return jsonify({"history": history})
@@ -1069,10 +1105,14 @@ def get_season_report():
             full_data = db.fetch_game_logs(season_param, lightweight=False)
             for gl in (full_data or []):
                 bh = _detect_big_hands(gl)
-                for player, tier in bh.items():
+                for player, info in bh.items():
+                    tier = info["tier"]
                     if tier in ("삼배만", "역만"):
                         title = gl.get("title", ["", ""])
-                        highlights.append({"player": player, "tier": tier, "date": title[1] if len(title) > 1 else "", "ref": gl.get("ref", "")})
+                        entry = {"player": player, "tier": tier, "date": title[1] if len(title) > 1 else "", "ref": gl.get("ref", "")}
+                        if tier == "역만" and info.get("yakus"):
+                            entry["yakus"] = info["yakus"]
+                        highlights.append(entry)
         except Exception:
             pass
 
@@ -1219,6 +1259,25 @@ def update_settings():
 # ==================================================================
 # 헬퍼
 # ==================================================================
+
+def _get_season_dates(db, season_param):
+    """시즌 시작/종료일 계산"""
+    if season_param == "all":
+        return {"start": "", "end": ""}
+    try:
+        season = int(season_param)
+        base_year = db._config.SEASON_BASE_YEAR
+        # 시즌 번호 → 연도/반기 역산
+        # season 1 = base_year 상반기, season 2 = base_year 하반기
+        half = (season - 1) % 2  # 0=상반기, 1=하반기
+        year = base_year + (season - 1) // 2
+        if half == 0:
+            return {"start": f"{year}-01-01", "end": f"{year}-06-30"}
+        else:
+            return {"start": f"{year}-07-01", "end": f"{year}-12-31"}
+    except Exception:
+        return {"start": "", "end": ""}
+
 
 def _build_tenhou_url(game_log):
     import urllib.parse
