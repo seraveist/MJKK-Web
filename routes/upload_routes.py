@@ -65,7 +65,10 @@ def upload_log():
             "upload_log.html",
             message="패보 저장 실패: 로그 데이터가 없습니다.",
         )
-
+        
+    # ★ 디버그: 요청한 ID와 반환된 ref 비교
+    logger.info("요청 paipu_id: %s / 반환 ref: %s", paipu_id, game_log.get("ref"))
+    
     # 4) DB 저장
     db = _get_db()
     try:
