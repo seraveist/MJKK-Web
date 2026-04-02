@@ -103,7 +103,7 @@ async function loadGameLogs() {
     }
 
     tbody.innerHTML = "";
-    const tierBadge = { "역만": "badge-yakuman", "삼배만": "badge-sanbaiman", "배만": "badge-baiman" };
+    const tierBadge = { "역만": "badge-yakuman", "삼배만": "badge-sanbaiman", "배만": "badge-baiman", "더블역만": "badge-double-yakuman", "트리플역만": "badge-double-yakuman" };
 
     logs.forEach(game => {
       const row = document.createElement("tr");
@@ -123,7 +123,7 @@ async function loadGameLogs() {
           for (const [pName, bInfo] of Object.entries(bigHands)) {
             if (p.name === pName || (p.name && pName && p.name.includes(pName))) {
               const tier = typeof bInfo === "string" ? bInfo : bInfo.tier;
-              const cls = tierBadge[tier] || "";
+              const cls = tierBadge[tier] || (tier.includes("역만") ? "badge-double-yakuman" : "");
               badge = ` <span class="big-hand-badge ${cls}">${tier}</span>`;
               break;
             }

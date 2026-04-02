@@ -145,7 +145,7 @@ function renderRoundsList(data) {
     if (r.yakus && r.yakus.length > 0) {
       const y0 = r.yakus[0];
       if (y0.tier) {
-        const tierClass = {"역만":"tier-yakuman","삼배만":"tier-sanbaiman","배만":"tier-baiman","하네만":"tier-haneman","만관":"tier-mangan"}[y0.tier] || "";
+        const tierClass = {"역만":"tier-yakuman","삼배만":"tier-sanbaiman","배만":"tier-baiman","하네만":"tier-haneman","만관":"tier-mangan","더블역만":"tier-double-yakuman","트리플역만":"tier-double-yakuman"}[y0.tier] || (y0.tier && y0.tier.includes("역만") ? "tier-double-yakuman" : "");
         tierBadge = ` <span class="tier-badge ${tierClass}">${y0.tier}</span>`;
       }
       if (y0.han && y0.fu) {

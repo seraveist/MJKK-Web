@@ -319,30 +319,38 @@ def _detect_big_hands(game_log):
                     # 親/子 구분하여 점수 기준 분리
                     is_host = rnd.isHost(seat)
                     tier = None
-                    if is_host:
-                        # 親: 배만 24000, 삼배만 36000, 역만 48000
-                        if score >= 48000:
-                            tier = "역만"
-                        elif score >= 36000:
+                    yakuman_base = 48000 if is_host else 32000
+
+                    if score >= yakuman_base * 2:
+                        # 더블역만 이상
+                        multi = score // yakuman_base
+                        if multi == 2:
+                            tier = "더블역만"
+                        elif multi == 3:
+                            tier = "트리플역만"
+                        else:
+                            tier = f"{multi}배역만"
+                    elif score >= yakuman_base:
+                        tier = "역만"
+                    elif is_host:
+                        if score >= 36000:
                             tier = "삼배만"
                         elif score >= 24000:
                             tier = "배만"
                     else:
-                        # 子: 배만 16000, 삼배만 24000, 역만 32000
-                        if score >= 32000:
-                            tier = "역만"
-                        elif score >= 24000:
+                        if score >= 24000:
                             tier = "삼배만"
                         elif score >= 16000:
                             tier = "배만"
 
                     if tier:
-                        tier_rank = {"배만": 1, "삼배만": 2, "역만": 3}
+                        tier_rank = {"배만": 1, "삼배만": 2, "역만": 3, "더블역만": 4, "트리플역만": 5}
+                        cur_rank = tier_rank.get(tier, 6)  # N배역만은 6 이상
                         existing = results.get(display_name)
-                        if not existing or tier_rank.get(tier, 0) > tier_rank.get(existing.get("tier"), 0):
-                            # 역만일 때 역 이름 추출
+                        if not existing or cur_rank > tier_rank.get(existing.get("tier"), 0):
+                            # 역만급 이상일 때 역 이름 추출
                             yaku_names = []
-                            if tier == "역만" and yi < len(rnd.yakus):
+                            if cur_rank >= 3 and yi < len(rnd.yakus):
                                 for y in rnd.yakus[yi]:
                                     clean = y.split("(")[0]
                                     if "Dora" in y or "ドラ" in y or "Red" in y or "赤" in y:
@@ -731,9 +739,9 @@ def get_yakuman_history():
             big = _detect_big_hands(game_log)
             for player, info in big.items():
                 tier = info["tier"]
-                if tier in ("삼배만", "역만"):
+                if tier != "배만":
                     entry = {"date": date, "player": player, "tier": tier, "ref": game_log.get("ref", "")}
-                    if tier == "역만" and info.get("yakus"):
+                    if info.get("yakus"):
                         entry["yakus"] = info["yakus"]
                     history.append(entry)
 
@@ -1119,10 +1127,10 @@ def get_season_report():
                 bh = _detect_big_hands(gl)
                 for player, info in bh.items():
                     tier = info["tier"]
-                    if tier in ("삼배만", "역만"):
+                    if tier != "배만":
                         title = gl.get("title", ["", ""])
                         entry = {"player": player, "tier": tier, "date": title[1] if len(title) > 1 else "", "ref": gl.get("ref", "")}
-                        if tier == "역만" and info.get("yakus"):
+                        if info.get("yakus"):
                             entry["yakus"] = info["yakus"]
                         highlights.append(entry)
         except Exception:

@@ -269,7 +269,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const detailBtn = h.ref ? ` <a href="/games/${h.ref}" style="font-size:11px;color:var(--text-link);text-decoration:none;margin-left:4px;">상세 →</a>` : "";
         return `<div class="tl-item">
           <span class="tl-date">${h.date}</span>
-          <span class="tl-badge ${h.tier === "역만" ? "tl-yakuman" : "tl-sanbaiman"}">${h.tier}</span>
+          <span class="tl-badge ${h.tier === "삼배만" ? "tl-sanbaiman" : h.tier === "역만" ? "tl-yakuman" : "tl-double-yakuman"}">${h.tier}</span>
           <span style="font-weight:500;color:var(--text-primary);">${h.player}</span>${yakuStr}${detailBtn}
         </div>`;
       }).join("");
