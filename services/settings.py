@@ -8,7 +8,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 DEFAULT_SETTINGS = {
-    "elo_params": {"K": 6, "NORM": 8000, "initial": 1500},
+    "elo_params": {"K": 6, "NORM": 8000, "initial": 1500, "sensitivity": 400},
     "awards_config": {"min_games_ratio": 0.3, "min_games_floor": 3},
     "cache_ttl": {"stats": 3600, "elo": 86400},
 }

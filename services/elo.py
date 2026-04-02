@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_RATING = 1500
 DEFAULT_K = 6
 DEFAULT_NORM = 8000
+DEFAULT_SENSITIVITY = 400
 ELO_COLLECTION = "elo_ratings"
 
 
@@ -24,18 +25,18 @@ def _get_elo_params(db_service):
         from services.settings import get_setting
         params = get_setting(db_service, "elo_params")
         if params:
-            return params.get("K", DEFAULT_K), params.get("NORM", DEFAULT_NORM), params.get("initial", DEFAULT_RATING)
+            return (params.get("K", DEFAULT_K), params.get("NORM", DEFAULT_NORM),
+                    params.get("initial", DEFAULT_RATING), params.get("sensitivity", DEFAULT_SENSITIVITY))
     except Exception:
         pass
-    return DEFAULT_K, DEFAULT_NORM, DEFAULT_RATING
+    return DEFAULT_K, DEFAULT_NORM, DEFAULT_RATING, DEFAULT_SENSITIVITY
 
 
 def calculate_elo_for_season(db_service, season_param, K=None, NORM=None):
     """
     시즌 전체 대국을 시간순으로 처리하여 ELO 레이팅 계산.
     """
-    # 설정에서 파라미터 조회
-    cfg_K, cfg_NORM, cfg_initial = _get_elo_params(db_service)
+    cfg_K, cfg_NORM, cfg_initial, cfg_sens = _get_elo_params(db_service)
     if K is None: K = cfg_K
     if NORM is None: NORM = cfg_NORM
 
@@ -89,7 +90,7 @@ def calculate_elo_for_season(db_service, season_param, K=None, NORM=None):
 
                 rw = ratings[w_user]
                 rl = ratings[l_user]
-                ew = 1 / (1 + 10 ** ((rl - rw) / 400))
+                ew = 1 / (1 + 10 ** ((rl - rw) / cfg_sens))
 
                 delta_w = K * weight * (1 - ew)
                 delta_l = K * weight * (0 - (1 - ew))
@@ -112,7 +113,7 @@ def calculate_elo_for_season(db_service, season_param, K=None, NORM=None):
     return {
         "ratings": active_ratings,
         "history": active_history,
-        "params": {"K": K, "NORM": NORM, "initial": DEFAULT_RATING},
+        "params": {"K": K, "NORM": NORM, "initial": cfg_initial, "sensitivity": cfg_sens},
     }
 
 

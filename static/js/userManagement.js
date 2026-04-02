@@ -142,6 +142,7 @@ async function loadSettings() {
     document.getElementById("setEloK").value = elo.K || 6;
     document.getElementById("setEloNorm").value = elo.NORM || 8000;
     document.getElementById("setEloInitial").value = elo.initial || 1500;
+    document.getElementById("setEloSensitivity").value = elo.sensitivity || 400;
     document.getElementById("setAwardsRatio").value = awards.min_games_ratio || 0.3;
   } catch (e) { console.error("Settings load error:", e); }
 }
@@ -159,6 +160,7 @@ async function saveSettings() {
           K: parseFloat(document.getElementById("setEloK").value) || 6,
           NORM: parseInt(document.getElementById("setEloNorm").value) || 8000,
           initial: parseInt(document.getElementById("setEloInitial").value) || 1500,
+          sensitivity: parseInt(document.getElementById("setEloSensitivity").value) || 400,
         },
         awards_config: {
           min_games_ratio: parseFloat(document.getElementById("setAwardsRatio").value) || 0.3,
