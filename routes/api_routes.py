@@ -298,7 +298,7 @@ def _detect_big_hands(game_log):
     names = game_log.get("name", [])
     results = {}
 
-    YAKU_KR = {"国士無双":"국사무쌍","四暗刻":"스안커","大三元":"대삼원","小四喜":"소사희","大四喜":"대사희","字一色":"자일색","緑一色":"녹일색","清老頭":"청노두","九蓮宝燈":"구련보등","天和":"천화","地和":"지화","数え役満":"헤아림 역만","Kokushi Musou":"국사무쌍","Suuankou":"스안커","Daisangen":"대삼원","Shousuushii":"소사희","Daisuushii":"대사희","Tsuuiisou":"자일색","Ryuuiisou":"녹일색","Chinroutou":"청노두","Chuuren Poutou":"구련보등"}
+    YAKU_KR = {"国士無双":"국사무쌍","国士無双十三面待ち":"국사무쌍 13면대기","四暗刻":"스안커","四暗刻単騎待ち":"스안커 단기","大三元":"대삼원","小四喜":"소사희","大四喜":"대사희","字一色":"자일색","緑一色":"녹일색","清老頭":"청노두","九蓮宝燈":"구련보등","九蓮宝燈九面待ち":"순정구련보등","純正九蓮宝燈":"순정구련보등","天和":"천화","地和":"지화","数え役満":"헤아림 역만","Kokushi Musou":"국사무쌍","Kokushi Musou 13":"국사무쌍 13면대기","Suuankou":"스안커","Suuankou Tanki":"스안커 단기","Daisangen":"대삼원","Shousuushii":"소사희","Daisuushii":"대사희","Tsuuiisou":"자일색","Ryuuiisou":"녹일색","Chinroutou":"청노두","Chuuren Poutou":"구련보등","Junsei Chuuren Poutou":"순정구련보등"}
 
     try:
         parsed = tenhouLog.game(game_log)
