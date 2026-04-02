@@ -290,12 +290,14 @@ class PlayerStatistic(object):
             self.richi_winGame.add(isWin and scoreChange)
             self.richi_zimo.add(isZimo and scoreChange)
             self.richi_rong.add(isRong and scoreChange)
-            self.richi_yifa.add(isYifa and scoreChange)
             self.richi_chong.add(isChong and scoreChange)
             self.richi_otherZimo.add(isOtherZimo and scoreChange)
             self.richi_draw.add(isDraw and scoreChange)
             
             if isWin:
+                # 일발율: 리치 화료 중 일발 비율
+                self.richi_yifa.add(isYifa and scoreChange)
+
                 ura_count = 0
                 if log.dora:
                     try:
