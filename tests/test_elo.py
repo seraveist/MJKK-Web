@@ -61,44 +61,41 @@ def test_weight_scaling():
     print(f"PASS: weight scaling (1000={w1000:.3f}, 8000={w8000:.3f}, 16000={w16000:.3f})")
 
 
-def test_no_change_for_zero_delta():
-    """점수 변동 0인 플레이어는 ELO 변동 없어야 함"""
-    deltas = [8000, -8000, 0, 0]
+def test_no_change_for_equal_scores():
+    """동점인 쌍은 ELO 변동 없어야 함"""
+    scores = [45000, 25000, 25000, 5000]
     involved = []
     for i in range(4):
         for j in range(i + 1, 4):
-            if deltas[i] == 0 or deltas[j] == 0:
-                continue
-            if (deltas[i] > 0 and deltas[j] > 0) or (deltas[i] < 0 and deltas[j] < 0):
+            diff = scores[i] - scores[j]
+            if diff == 0:
                 continue
             involved.append((i, j))
 
-    # 0, 1만 관여해야 함
-    assert len(involved) == 1, f"Only 1 pair should be involved, got {len(involved)}"
-    assert involved[0] == (0, 1), f"Pair should be (0,1), got {involved[0]}"
-    print(f"PASS: zero-delta players not involved (pairs={involved})")
+    # 2,3은 동점이라 제외 → 5쌍만 관여
+    assert len(involved) == 5, f"5 pairs should be involved (excluding tie), got {len(involved)}"
+    assert (1, 2) not in involved, "Tied players should not be paired"
+    print(f"PASS: equal-score players not involved (pairs={len(involved)})")
 
 
-def test_full_round_zero_sum():
-    """쯔모 시나리오에서 4인 전체 ELO 변동 합이 0인지 확인"""
+def test_full_game_zero_sum():
+    """4인 최종 스코어 기반 전체 ELO 변동 합이 0인지 확인"""
     K = 6
     NORM = 8000
     ratings = [1500, 1500, 1400, 1600]
-    deltas = [8000, -2000, -2000, -4000]  # A 쯔모 만관
+    scores = [45000, 30000, 15000, 10000]
 
     elo_deltas = [0.0, 0.0, 0.0, 0.0]
 
     for i in range(4):
         for j in range(i + 1, 4):
-            if deltas[i] == 0 or deltas[j] == 0:
-                continue
-            if (deltas[i] > 0 and deltas[j] > 0) or (deltas[i] < 0 and deltas[j] < 0):
+            diff = scores[i] - scores[j]
+            if diff == 0:
                 continue
 
-            wi = i if deltas[i] > 0 else j
-            li = i if deltas[i] < 0 else j
-            loss_abs = abs(deltas[li])
-            weight = min(loss_abs / NORM, 2.5)
+            wi = i if diff > 0 else j
+            li = i if diff < 0 else j
+            weight = min(abs(diff) / NORM, 2.5)
 
             rw, rl = ratings[wi], ratings[li]
             ew = 1 / (1 + 10 ** ((rl - rw) / 400))
@@ -110,8 +107,8 @@ def test_full_round_zero_sum():
             elo_deltas[li] += dl
 
     total = sum(elo_deltas)
-    assert abs(total) < 1e-8, f"Full round not zero-sum: {total}"
-    print(f"PASS: full round zero-sum (total={total:.10f})")
+    assert abs(total) < 1e-8, f"Full game not zero-sum: {total}"
+    print(f"PASS: full game zero-sum (total={total:.10f})")
     print(f"  Deltas: {[f'{d:.4f}' for d in elo_deltas]}")
 
 
@@ -119,6 +116,6 @@ if __name__ == "__main__":
     test_pairwise_zero_sum()
     test_strong_vs_weak()
     test_weight_scaling()
-    test_no_change_for_zero_delta()
-    test_full_round_zero_sum()
+    test_no_change_for_equal_scores()
+    test_full_game_zero_sum()
     print("\nAll ELO tests passed!")

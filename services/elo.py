@@ -1,7 +1,7 @@
 """
-ELO 레이팅 서비스 — 국수지 기반 제로섬
-- 매 국의 점수 변동에서 득점/실점 쌍 추출
-- 쌍별 ELO 변동 계산 (선형 weight)
+ELO 레이팅 서비스 — 최종 스코어 기반 제로섬
+- 게임 최종 점수로 쌍별 비교
+- 점수 차이에 비례한 weight
 - 완전한 제로섬 보장
 """
 import logging
@@ -9,7 +9,6 @@ import datetime
 from typing import Optional
 
 from config.users import USERS, find_user_by_alias
-from src import tenhouLog
 
 logger = logging.getLogger(__name__)
 
@@ -57,65 +56,46 @@ def calculate_elo_for_season(db_service, season_param, K=None, NORM=None):
         title = game_log.get("title", ["", ""])
         date = title[1] if len(title) > 1 else ""
         names_raw = game_log.get("name", [])
+        sc = game_log.get("sc", [])
 
         # 게임 내 플레이어를 유저에 매핑
         seat_to_user = {}
+        final_scores = {}
         for i, raw_name in enumerate(names_raw):
             matched = find_user_by_alias(USERS, raw_name)
             if matched:
                 seat_to_user[i] = matched["name"]
+                final_scores[i] = sc[i * 2] if i * 2 < len(sc) else 0
 
         if len(seat_to_user) < 2:
             continue
 
-        # tenhouLog 파서로 정확한 국별 데이터 추출
-        try:
-            parsed = tenhouLog.game(game_log)
-        except Exception as e:
-            logger.warning("ELO: failed to parse game %s: %s", date, e)
-            continue
+        # 최종 스코어 기반 쌍별 ELO 업데이트
+        seats = list(seat_to_user.keys())
+        for a in range(len(seats)):
+            for b in range(a + 1, len(seats)):
+                si, sj = seats[a], seats[b]
+                score_diff = final_scores[si] - final_scores[sj]
+                if score_diff == 0:
+                    continue
 
-        player_count = len(names_raw)
+                wi = si if score_diff > 0 else sj
+                li = si if score_diff < 0 else sj
 
-        for rnd in parsed.logs:
-            # 국별 점수 변동 합산
-            deltas = [0] * player_count
-            for sc_arr in rnd.changeScore:
-                for i in range(min(player_count, len(sc_arr))):
-                    deltas[i] += sc_arr[i]
+                w_user = seat_to_user[wi]
+                l_user = seat_to_user[li]
 
-            # 제로섬 검증
-            if sum(deltas) != 0 or all(d == 0 for d in deltas):
-                continue
+                weight = min(abs(score_diff) / NORM, 2.5)
 
-            # 득점/실점 쌍 추출 후 ELO 업데이트
-            for i in range(player_count):
-                for j in range(i + 1, player_count):
-                    if deltas[i] == 0 or deltas[j] == 0:
-                        continue
-                    if (deltas[i] > 0 and deltas[j] > 0) or (deltas[i] < 0 and deltas[j] < 0):
-                        continue
+                rw = ratings[w_user]
+                rl = ratings[l_user]
+                ew = 1 / (1 + 10 ** ((rl - rw) / 400))
 
-                    wi = i if deltas[i] > 0 else j
-                    li = i if deltas[i] < 0 else j
+                delta_w = K * weight * (1 - ew)
+                delta_l = K * weight * (0 - (1 - ew))
 
-                    w_user = seat_to_user.get(wi)
-                    l_user = seat_to_user.get(li)
-                    if not w_user or not l_user:
-                        continue
-
-                    loss_abs = abs(deltas[li])
-                    weight = min(loss_abs / NORM, 2.5)
-
-                    rw = ratings[w_user]
-                    rl = ratings[l_user]
-                    ew = 1 / (1 + 10 ** ((rl - rw) / 400))
-
-                    delta_w = K * weight * (1 - ew)
-                    delta_l = K * weight * (0 - (1 - ew))
-
-                    ratings[w_user] += delta_w
-                    ratings[l_user] += delta_l
+                ratings[w_user] += delta_w
+                ratings[l_user] += delta_l
 
         # 게임 종료 후 히스토리 기록
         for user_name in seat_to_user.values():
