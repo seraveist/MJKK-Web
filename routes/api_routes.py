@@ -316,13 +316,25 @@ def _detect_big_hands(game_log):
                     matched = find_user_by_alias(USERS, names[seat])
                     display_name = matched["name"] if matched else names[seat]
 
+                    # 親/子 구분하여 점수 기준 분리
+                    is_host = rnd.isHost(seat)
                     tier = None
-                    if score >= 32000:
-                        tier = "역만"
-                    elif score >= 24000:
-                        tier = "삼배만"
-                    elif score >= 16000:
-                        tier = "배만"
+                    if is_host:
+                        # 親: 배만 24000, 삼배만 36000, 역만 48000
+                        if score >= 48000:
+                            tier = "역만"
+                        elif score >= 36000:
+                            tier = "삼배만"
+                        elif score >= 24000:
+                            tier = "배만"
+                    else:
+                        # 子: 배만 16000, 삼배만 24000, 역만 32000
+                        if score >= 32000:
+                            tier = "역만"
+                        elif score >= 24000:
+                            tier = "삼배만"
+                        elif score >= 16000:
+                            tier = "배만"
 
                     if tier:
                         tier_rank = {"배만": 1, "삼배만": 2, "역만": 3}
