@@ -357,6 +357,10 @@ def _detect_big_hands(game_log):
                                         continue
                                     kr = YAKU_KR.get(clean, clean)
                                     yaku_names.append(kr)
+                                # 헤아림 역만 판정: 역만급인데 실제 역만 역이 없으면
+                                REAL_YAKUMAN = {"국사무쌍","국사무쌍 13면대기","스안커","스안커 단기","대삼원","소사희","대사희","자일색","녹일색","청노두","구련보등","순정구련보등","천화","지화","헤아림 역만"}
+                                if yaku_names and not any(y in REAL_YAKUMAN for y in yaku_names):
+                                    yaku_names = ["헤아림 역만"]
                             results[display_name] = {"tier": tier, "yakus": yaku_names}
     except Exception as e:
         logger.warning("Big hand detection failed: %s", e)
@@ -455,7 +459,18 @@ def get_game_detail(ref):
                             fu_m = re.findall(r'(\d+)符', score_str)
                             if fu_m:
                                 fu_val = int(fu_m[0])
-                            if '役満' in score_str:
+                            # 더블역만 이상을 먼저 체크 (役満 포함 문자열이므로 순서 중요)
+                            ym_multi = re.findall(r'(\d+)倍役満', score_str)
+                            if ym_multi:
+                                n = int(ym_multi[0])
+                                if n == 2: tier = "더블역만"
+                                elif n == 3: tier = "트리플역만"
+                                else: tier = f"{n}배역만"
+                            elif 'ダブル役満' in score_str:
+                                tier = "더블역만"
+                            elif 'トリプル役満' in score_str:
+                                tier = "트리플역만"
+                            elif '役満' in score_str:
                                 tier = "역만"
                             elif '三倍満' in score_str:
                                 tier = "삼배만"
