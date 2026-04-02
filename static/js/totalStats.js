@@ -1,13 +1,18 @@
 /**
- * totalStats.js — 전체 유저 통계 (v3)
- * - 배치 API, 최고/최저 하이라이팅
- * - [신규] ELO 열 추가
+ * totalStats.js — 전체 유저 통계 (v4)
+ * - 행=유저, 열=스탯 (전치)
+ * - 카테고리 탭 필터
+ * - 열 헤더 클릭 정렬
+ * - ELO 열 포함
+ * - 최고/최저 하이라이팅
  */
-
 let currentSeason = window.config ? window.config.season : "all";
 let allPlayers = [];
 let userStats = {};
 let eloRatings = {};
+let currentCategory = "전체";
+let sortKey = null;
+let sortDesc = true;
 
 const urlSeason = new URLSearchParams(location.search).get("season");
 if (urlSeason) { currentSeason = urlSeason; syncTabUI(currentSeason); }
@@ -28,7 +33,6 @@ window.addEventListener("popstate", (e) => {
   if (e.state && e.state.season) {
     currentSeason = e.state.season;
     syncTabUI(currentSeason);
-    resetTable();
     loadTotalStats();
   }
 });
@@ -39,24 +43,39 @@ document.querySelectorAll(".season-tabs .tab").forEach(tab => {
     tab.classList.add("active");
     currentSeason = tab.dataset.season;
     pushState(currentSeason);
-    resetTable();
     loadTotalStats();
   });
 });
 
-document.addEventListener("DOMContentLoaded", () => loadTotalStats());
+document.addEventListener("DOMContentLoaded", () => {
+  buildCatTabs();
+  loadTotalStats();
+});
 
-function resetTable() {
-  document.getElementById("colHeader").innerHTML = "<th>항목</th>";
-  document.getElementById("totalStatsBody").innerHTML = "";
+// ── 카테고리 탭 ──
+function buildCatTabs() {
+  const container = document.getElementById("catTabs");
+  if (!container) return;
+  container.innerHTML = "";
+  ["전체", ...CATEGORIES].forEach(cat => {
+    const btn = document.createElement("button");
+    btn.className = "cat-tab" + (cat === currentCategory ? " active" : "");
+    btn.textContent = cat;
+    btn.addEventListener("click", () => {
+      currentCategory = cat;
+      document.querySelectorAll("#catTabs .cat-tab").forEach(t => t.classList.remove("active"));
+      btn.classList.add("active");
+      sortKey = null;
+      buildTable();
+    });
+    container.appendChild(btn);
+  });
 }
 
+// ── 데이터 로드 ──
 async function loadTotalStats() {
   showLoading();
-  const tbody = document.getElementById("totalStatsBody");
-
   try {
-    // 통계 + ELO 병렬 로딩
     const [statsRes, eloRes] = await Promise.all([
       fetch(`/totalstats_api?season=${currentSeason}`),
       fetch(`/api/elo?season=${currentSeason}`).catch(() => null),
@@ -65,131 +84,156 @@ async function loadTotalStats() {
     if (!statsRes.ok) throw new Error(`HTTP ${statsRes.status}`);
     const data = await statsRes.json();
 
-    // ELO 데이터
     eloRatings = {};
     try {
       if (eloRes && eloRes.ok) {
         const eloData = await eloRes.json();
         eloRatings = eloData.ratings || {};
       }
-    } catch (e) { /* ELO 없어도 정상 진행 */ }
+    } catch (e) { /* */ }
 
     if (data.error) {
-      tbody.innerHTML = `<tr><td class="empty-state">${
-        data.error === "No game data found"
-          ? "이 시즌의 대국 데이터가 없습니다."
-          : data.error
+      document.getElementById("totalStatsBody").innerHTML = `<tr><td class="empty-state">${
+        data.error === "No game data found" ? "이 시즌의 대국 데이터가 없습니다." : data.error
       }</td></tr>`;
+      document.getElementById("colHeader").innerHTML = "";
       return;
     }
 
     allPlayers = data.allPlayers || [];
     userStats = {};
-
-    if (allPlayers.length === 0) {
-      tbody.innerHTML = `<tr><td class="empty-state">통계를 표시할 플레이어가 없습니다.</td></tr>`;
-      return;
-    }
-
     for (const p of allPlayers) {
       if (data.stats[p]) userStats[p] = enrichStats(data.stats[p]);
     }
-    buildTable();
 
+    sortKey = null;
+    buildTable();
   } catch (e) {
     console.error("Error:", e);
-    tbody.innerHTML = `<tr><td class="error-state">데이터를 불러오는 중 오류가 발생했습니다.</td></tr>`;
+    document.getElementById("totalStatsBody").innerHTML = `<tr><td class="error-state">데이터를 불러오는 중 오류가 발생했습니다.</td></tr>`;
   } finally {
     hideLoading();
   }
 }
 
+// ── 테이블 빌드 (행=유저, 열=스탯) ──
 function buildTable() {
-  const headerRow = document.getElementById("colHeader");
-  headerRow.innerHTML = "<th>항목</th>";
-  allPlayers.forEach(p => {
-    const th = document.createElement("th");
-    th.textContent = p;
-    headerRow.appendChild(th);
-  });
+  // 대국 있는 유저만
+  const activePlayers = allPlayers.filter(p => userStats[p] && userStats[p].games > 0);
+  if (activePlayers.length === 0) {
+    document.getElementById("colHeader").innerHTML = "";
+    document.getElementById("totalStatsBody").innerHTML = `<tr><td class="empty-state">통계를 표시할 플레이어가 없습니다.</td></tr>`;
+    return;
+  }
 
+  // 현재 카테고리에 해당하는 키 필터
+  const visibleKeys = [];
+  // ELO를 첫 열로
+  if (Object.keys(eloRatings).length > 0) {
+    visibleKeys.push({ key: "_elo", label: "ELO", format: "int", higherIsBetter: true });
+  }
+  for (const [key, { label, format, category, higherIsBetter }] of Object.entries(display_keys)) {
+    if (currentCategory !== "전체" && category !== currentCategory) continue;
+    visibleKeys.push({ key, label, format, higherIsBetter });
+  }
+
+  // 정렬
+  let sortedPlayers = [...activePlayers];
+  if (sortKey) {
+    sortedPlayers.sort((a, b) => {
+      const va = _getStatVal(a, sortKey);
+      const vb = _getStatVal(b, sortKey);
+      if (va === null && vb === null) return 0;
+      if (va === null) return 1;
+      if (vb === null) return -1;
+      return sortDesc ? vb - va : va - vb;
+    });
+  }
+
+  // 열별 최고/최저 미리 계산
+  const colExtremes = {};
+  for (const col of visibleKeys) {
+    const vals = activePlayers.map(p => _getStatVal(p, col.key)).filter(v => v !== null);
+    if (vals.length >= 2) {
+      colExtremes[col.key] = { max: Math.max(...vals), min: Math.min(...vals) };
+    }
+  }
+
+  // 헤더
+  const headerRow = document.getElementById("colHeader");
+  headerRow.innerHTML = "";
+
+  const thName = document.createElement("th");
+  thName.textContent = "유저명";
+  thName.className = "sortable-th";
+  thName.addEventListener("click", () => {
+    sortKey = "_name";
+    sortDesc = !sortDesc;
+    buildTable();
+  });
+  headerRow.appendChild(thName);
+
+  for (const col of visibleKeys) {
+    const th = document.createElement("th");
+    th.className = "sortable-th";
+    const arrow = sortKey === col.key ? (sortDesc ? " ▼" : " ▲") : "";
+    th.innerHTML = `${col.label}<span class="sort-arrow">${arrow}</span>`;
+    th.addEventListener("click", () => {
+      if (sortKey === col.key) { sortDesc = !sortDesc; }
+      else { sortKey = col.key; sortDesc = true; }
+      buildTable();
+    });
+    headerRow.appendChild(th);
+  }
+
+  // 이름 정렬
+  if (sortKey === "_name") {
+    sortedPlayers.sort((a, b) => sortDesc ? b.localeCompare(a) : a.localeCompare(b));
+  }
+
+  // 바디
   const tbody = document.getElementById("totalStatsBody");
   tbody.innerHTML = "";
 
-  // [신규] ELO 행 추가
-  if (Object.keys(eloRatings).length > 0) {
-    const eloRow = document.createElement("tr");
-    const eloTh = document.createElement("th");
-    eloTh.textContent = "ELO 레이팅";
-    eloRow.appendChild(eloTh);
-
-    const eloCells = [];
-    const eloVals = [];
-    allPlayers.forEach(p => {
-      const td = document.createElement("td");
-      const elo = eloRatings[p];
-      if (elo) {
-        td.textContent = Math.round(elo);
-        td.style.fontWeight = "600";
-        eloVals.push(elo);
-      } else {
-        td.textContent = "-";
-        eloVals.push(null);
-      }
-      eloCells.push(td);
-      eloRow.appendChild(td);
-    });
-
-    // 최고/최저 하이라이팅
-    const validElo = eloVals.filter(v => v !== null);
-    if (validElo.length >= 2) {
-      const maxElo = Math.max(...validElo);
-      const minElo = Math.min(...validElo);
-      if (maxElo !== minElo) {
-        eloVals.forEach((v, i) => {
-          if (v === maxElo) eloCells[i].className = "val-best";
-          else if (v === minElo) eloCells[i].className = "val-worst";
-        });
-      }
-    }
-    tbody.appendChild(eloRow);
-  }
-
-  // 기존 통계 행
-  for (const [key, { label, format, higherIsBetter }] of Object.entries(display_keys)) {
+  for (const player of sortedPlayers) {
     const row = document.createElement("tr");
-    const th = document.createElement("th");
-    th.textContent = label;
-    row.appendChild(th);
 
-    const cells = [];
-    const rawValues = [];
+    const tdName = document.createElement("td");
+    tdName.innerHTML = `<a href="/stats_page/${encodeURIComponent(player)}?season=${currentSeason}" style="text-decoration:none;color:var(--text-link);font-weight:600;">${player}</a>`;
+    row.appendChild(tdName);
 
-    allPlayers.forEach(player => {
+    for (const col of visibleKeys) {
       const td = document.createElement("td");
-      const raw = getNestedValue(userStats[player] || {}, key);
-      td.textContent = formatValue(raw, format);
-      cells.push(td);
-      rawValues.push(typeof raw === "number" && !isNaN(raw) ? raw : null);
-      row.appendChild(td);
-    });
+      const raw = _getStatVal(player, col.key);
+      td.textContent = _formatCol(raw, col);
 
-    if (higherIsBetter !== null && higherIsBetter !== undefined) {
-      const valid = rawValues.filter(v => v !== null);
-      if (valid.length >= 2) {
-        const maxVal = Math.max(...valid);
-        const minVal = Math.min(...valid);
-        if (maxVal !== minVal) {
-          rawValues.forEach((v, i) => {
-            if (v === null) return;
-            if (v === maxVal) cells[i].className = higherIsBetter ? "val-best" : "val-worst";
-            else if (v === minVal) cells[i].className = higherIsBetter ? "val-worst" : "val-best";
-          });
-        }
+      // 최고/최저 하이라이팅
+      const ext = colExtremes[col.key];
+      if (ext && raw !== null && ext.max !== ext.min && col.higherIsBetter !== null && col.higherIsBetter !== undefined) {
+        if (raw === ext.max) td.className = col.higherIsBetter ? "val-best" : "val-worst";
+        else if (raw === ext.min) td.className = col.higherIsBetter ? "val-worst" : "val-best";
       }
+
+      row.appendChild(td);
     }
     tbody.appendChild(row);
   }
+}
+
+// ── 헬퍼 ──
+function _getStatVal(player, key) {
+  if (key === "_elo") {
+    const elo = eloRatings[player];
+    return elo ? Math.round(elo) : null;
+  }
+  const raw = getNestedValue(userStats[player] || {}, key);
+  return typeof raw === "number" && !isNaN(raw) ? raw : null;
+}
+
+function _formatCol(raw, col) {
+  if (raw === null || raw === undefined) return "-";
+  if (col.key === "_elo") return Math.round(raw).toLocaleString();
+  return formatValue(raw, col.format);
 }
 
 function showLoading() { document.getElementById("loading").style.display = "flex"; }
