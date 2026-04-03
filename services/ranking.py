@@ -14,14 +14,6 @@ logger = logging.getLogger(__name__)
 def calculate_ranking(game_logs: list, users=None):
     """
     게임 로그로부터 랭킹과 일별 점수를 계산.
-    
-    Args:
-        game_logs: DB에서 가져온 게임 로그 리스트
-        users: 유저 목록 (기본값: config.users.USERS)
-        
-    Returns:
-        dict with keys: ranking, players, daily
-        None if no data
     """
     if users is None:
         users = USERS
@@ -33,16 +25,17 @@ def calculate_ranking(game_logs: list, users=None):
         user["name"]: {"point_sum": 0, "games": 0, "point_avg": 0}
         for user in users
     }
-    daily_scores = {}
+    daily_entries = []
 
     for log in game_logs:
         ref = log.get("ref", "unknown")
-        if ref not in daily_scores:
-            daily_scores[ref] = {}
+        title = log.get("title", ["", ""])
+        date = title[1] if len(title) > 1 else ""
 
         names = log.get("name", [])
         sc = log.get("sc", [])
 
+        points = {}
         for i in range(min(4, len(names))):
             try:
                 name = names[i]
@@ -55,7 +48,14 @@ def calculate_ranking(game_logs: list, users=None):
                 matched_name = matched["name"]
                 player_scores[matched_name]["point_sum"] += point
                 player_scores[matched_name]["games"] += 1
-                daily_scores[ref][matched_name] = point
+                points[matched_name] = point
+
+        if points:
+            daily_entries.append({
+                "date": date,
+                "ref": ref,
+                "points": points,
+            })
 
     # 평균 계산
     for stats in player_scores.values():
@@ -69,18 +69,11 @@ def calculate_ranking(game_logs: list, users=None):
     ]
     ranking_list.sort(key=lambda x: (-x["games"], -x["point_avg"]))
 
-    # 일별 점수 (최신순) — ref 포함
-    daily_list = [
-        {
-            "date": k.split("-")[0] if "-" in k else k,
-            "ref": k,
-            "points": v,
-        }
-        for k, v in sorted(daily_scores.items(), reverse=True)
-    ]
+    # 일별 점수 (최신순) — title[1] 날짜 기준 정렬
+    daily_entries.sort(key=lambda x: x["date"], reverse=True)
 
     return {
         "ranking": ranking_list,
         "players": [user["name"] for user in users],
-        "daily": daily_list,
+        "daily": daily_entries,
     }
