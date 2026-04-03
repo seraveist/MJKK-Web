@@ -256,7 +256,9 @@ def get_game_logs():
             for i in range(min(4, len(names))):
                 score = sc[i * 2] if i * 2 < len(sc) else 0
                 point = sc[i * 2 + 1] if i * 2 + 1 < len(sc) else 0
-                players.append({"name": names[i], "score": score, "point": point})
+                matched = find_user_by_alias(USERS, names[i])
+                display_name = matched["name"] if matched else names[i]
+                players.append({"name": display_name, "score": score, "point": point})
             players.sort(key=lambda p: -p["score"])
 
             # 배만/삼배만/역만 감지
