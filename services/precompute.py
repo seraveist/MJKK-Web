@@ -222,18 +222,135 @@ def _recompute_elo(db_service):
         logger.warning("ELO recompute failed: %s", e)
 
 
+def _compute_stats_from_parsed(parsed_games, users=None):
+    """
+    이미 파싱된 게임 객체로부터 통계 계산. (tenhouLog.game() 재호출 불필요)
+    parsed_games: [(raw_log, parsed_game_obj), ...]
+    """
+    if users is None:
+        users = USERS
+
+    if not parsed_games:
+        return {}
+
+    alias_map = {}
+    player_stats = {}
+    for user in users:
+        name = user["name"]
+        ps = tenhouStatistics.PlayerStatistic(games=None, playerName=user)
+        player_stats[name] = ps
+        for alias in user.get("aliases", [name]):
+            alias_map[alias] = name
+
+    for raw_log, game in parsed_games:
+        matched = set()
+        for player in game.players:
+            user_name = alias_map.get(player.name)
+            if user_name and user_name not in matched:
+                matched.add(user_name)
+                player_stats[user_name].process_game(game)
+
+    all_stats = {}
+    for name, ps in player_stats.items():
+        try:
+            stats = json.loads(ps.json())
+            stats["rankData"] = ps.rank_history
+            if stats.get("games", 0) > 0:
+                all_stats[name] = stats
+        except Exception as e:
+            logger.warning("Stats export failed for %s: %s", name, e)
+
+    return all_stats
+
+
+def _save_precomputed(db_service, season_param, stats):
+    """계산 결과를 MongoDB에 저장"""
+    col = db_service._db[COLLECTION_NAME]
+    col.update_one(
+        {"season": str(season_param)},
+        {
+            "$set": {
+                "season": str(season_param),
+                "stats": stats,
+                "players": list(stats.keys()),
+                "updated_at": datetime.datetime.utcnow(),
+            }
+        },
+        upsert=True,
+    )
+
+
 def precompute_all_seasons(db_service):
     """
-    모든 시즌 + 전체를 한번에 계산. 앱 시작 시 또는 수동 트리거용.
+    모든 시즌 + 전체를 한번에 계산.
+    [최적화] DB 1회 조회 + 파싱 1회 → 시즌별 분배
     """
-    from services.cache import cache
-    cache.clear()  # 전체 재계산 시에만 전체 클리어
+    import time
+    t0 = time.time()
 
+    from services.cache import cache
+    cache.clear()
+    _reload_users_from_db(db_service)
+
+    # 1) 전체 데이터 1회 조회
+    all_data = db_service.fetch_game_logs_for_stats("all")
+    if not all_data:
+        logger.info("No data found, skipping precompute")
+        return
+
+    # 2) 시간순 정렬 + 1회 파싱
+    all_data_sorted = sorted(all_data, key=lambda x: x.get("title", ["", ""])[1] if len(x.get("title", [])) > 1 else "")
+    logger.info("Parsing %d game logs...", len(all_data_sorted))
+    parsed_all = []
+    for log in all_data_sorted:
+        try:
+            parsed_all.append((log, tenhouLog.game(log)))
+        except Exception as e:
+            logger.warning("Parse failed for ref=%s: %s", log.get("ref", "?"), e)
+
+    t1 = time.time()
+    logger.info("Parsing done: %d games in %.1fs", len(parsed_all), t1 - t0)
+
+    # 3) 시즌별 분배
+    from collections import defaultdict
+    season_groups = defaultdict(list)
+    for raw_log, parsed in parsed_all:
+        season = _detect_season(db_service, raw_log)
+        if season:
+            season_groups[str(season)].append((raw_log, parsed))
+
+    # 4) 시즌별 계산 + 저장
     current = db_service.get_current_season()
     for s in range(1, current + 1):
-        precompute_for_season(db_service, str(s))
-    precompute_for_season(db_service, "all")
-    logger.info("All seasons precomputed (1~%d + all)", current)
+        s_key = str(s)
+        games = season_groups.get(s_key, [])
+        if not games:
+            logger.info("Season %s: no data, skipping", s_key)
+            continue
+        stats = _compute_stats_from_parsed(games)
+        _save_precomputed(db_service, s_key, stats)
+        logger.info("Season %s: %d games, %d players", s_key, len(games), len(stats))
+
+    # 5) 전체("all") 계산 + 저장
+    stats_all = _compute_stats_from_parsed(parsed_all)
+    _save_precomputed(db_service, "all", stats_all)
+    logger.info("All: %d games, %d players", len(parsed_all), len(stats_all))
+
+    t2 = time.time()
+    logger.info("All seasons precomputed (1~%d + all) in %.1fs (parse=%.1fs, compute=%.1fs)",
+                current, t2 - t0, t1 - t0, t2 - t1)
+
+
+def _reload_users_from_db(db_service):
+    """DB에서 최신 유저 목록을 읽어 USERS를 in-place 업데이트"""
+    try:
+        db_users = list(db_service._db["usersConfig"].find({}, {"_id": 0, "name": 1, "aliases": 1}))
+        if db_users:
+            USERS.clear()
+            USERS.extend(db_users)
+            logger.info("Reloaded %d users from DB for precompute", len(db_users))
+    except Exception as e:
+        logger.warning("Failed to reload users from DB: %s", e)
 
 
 def get_precomputed_stats(db_service, season_param):
