@@ -140,7 +140,10 @@ def _refresh_users_cache():
     users_col = db._db["usersConfig"]
     users = list(users_col.find({}, {"_id": 0, "name": 1, "aliases": 1}))
     if users:
-        users_module.USERS = users
+        # in-place 변경: 다른 모듈이 from config.users import USERS로 
+        # 가져간 참조도 함께 업데이트됨
+        users_module.USERS.clear()
+        users_module.USERS.extend(users)
     # 유저 변경 시 모든 통계/ELO 캐시 무효화
     try:
         from services.cache import cache
