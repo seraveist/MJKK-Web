@@ -30,7 +30,9 @@ def _compute_all_player_stats(game_logs, users=None):
     if not game_logs:
         return {}
 
-    total_games = [tenhouLog.game(log) for log in game_logs]
+    # 시간순 정렬 (rank_history, ELO 등 순서 의존 데이터 보장)
+    game_logs_sorted = sorted(game_logs, key=lambda x: x.get("title", ["", ""])[1] if len(x.get("title", [])) > 1 else "")
+    total_games = [tenhouLog.game(log) for log in game_logs_sorted]
 
     # [v3] single-pass: 1번 순회로 N명 동시 처리
     # alias → user name 매핑 빌드
@@ -257,7 +259,9 @@ def _detect_season(db_service, game_log):
         date_str = game_log.get("title", [None, None])[1]
         if not date_str:
             return None
-        dt = datetime.datetime.strptime(date_str, "%Y-%m-%d")
+        # YYYY-MM-DD hh:mm:ss 또는 YYYY-MM-DD 모두 대응
+        date_part = date_str[:10]
+        dt = datetime.datetime.strptime(date_part, "%Y-%m-%d")
         base_year = db_service._config.SEASON_BASE_YEAR
         if dt.month <= 6:
             return (dt.year - base_year) * 2 + 1

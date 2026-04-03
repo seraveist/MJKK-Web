@@ -92,7 +92,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const totalGames = filtered.reduce((s, p) => s + p.games, 0) / 4;
       const topPlayer = filtered.length > 0 ? [...filtered].sort((a, b) => b.games - a.games)[0] : null;
       const dates = (data.daily || []).map(d => d.date).filter(Boolean);
-      const latestDate = dates.length > 0 ? dates[0] : "-";
+      const latestDate = dates.length > 0 ? dates[0].slice(0, 10) : "-";
 
       summaryLine.innerHTML = `
         <span class="s-item"><span class="s-label">총 대국</span><span class="s-val">${Math.round(totalGames)}국</span></span>
@@ -143,7 +143,7 @@ document.addEventListener("DOMContentLoaded", () => {
         data.daily.forEach(d => {
           const row = document.createElement("tr");
           const tdDate = document.createElement("td");
-          tdDate.textContent = d.date;
+          tdDate.textContent = (d.date || "").slice(0, 10);
           tdDate.style.whiteSpace = "nowrap";
           tdDate.style.cursor = "pointer";
           tdDate.addEventListener("click", () => showViewerPopup(d.ref, tdDate));
@@ -265,12 +265,15 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       document.getElementById("yakumanSection").style.display = "";
       document.getElementById("yakumanTimeline").innerHTML = data.history.map(h => {
-        const yakuStr = h.tier.includes("역만") && h.yakus && h.yakus.length > 0 ? ` <span style="font-size:11px;color:var(--color-accent);">(${h.yakus.join(", ")})</span>` : "";
-        const detailBtn = h.ref ? ` <a href="/games/${h.ref}" style="font-size:11px;color:var(--text-link);text-decoration:none;margin-left:4px;">상세 →</a>` : "";
+        const yakuStr = h.tier.includes("역만") && h.yakus && h.yakus.length > 0 ? h.yakus.join(", ") : "";
+        const badgeCls = h.tier === "삼배만" ? "tl-sanbaiman" : h.tier === "역만" ? "tl-yakuman" : "tl-double-yakuman";
+        const detailBtn = h.ref ? `<a href="/games/${h.ref}" class="tl-detail">상세 →</a>` : "";
         return `<div class="tl-item">
-          <span class="tl-date">${h.date}</span>
-          <span class="tl-badge ${h.tier === "삼배만" ? "tl-sanbaiman" : h.tier === "역만" ? "tl-yakuman" : "tl-double-yakuman"}">${h.tier}</span>
-          <span style="font-weight:500;color:var(--text-primary);">${h.player}</span>${yakuStr}${detailBtn}
+          <span class="tl-date">${(h.date || "").slice(0, 10)}</span>
+          <span class="tl-badge ${badgeCls}">${h.tier}</span>
+          <span class="tl-player">${h.player}</span>
+          <span class="tl-yaku">${yakuStr}</span>
+          ${detailBtn}
         </div>`;
       }).join("");
     } catch (e) { console.error("Yakuman history load error:", e); }

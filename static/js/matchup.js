@@ -180,7 +180,7 @@ function renderGamesTable(data) {
     const pointColor = (p) => p >= 0 ? "color:var(--color-best);" : "color:var(--color-worst);";
 
     row.innerHTML = `
-      <td style="white-space:nowrap;">${g.date || "-"}</td>
+      <td style="white-space:nowrap;">${(g.date || "-").slice(0, 10)}</td>
       <td style="${rankStyle(g.p1_rank)}">${g.p1_rank}위</td>
       <td style="${rankStyle(g.p2_rank)}">${g.p2_rank}위</td>
       <td style="${pointColor(g.p1_point)}">${g.p1_point >= 0 ? "+" : ""}${g.p1_point.toFixed(1)}</td>

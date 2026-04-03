@@ -108,7 +108,7 @@ async function loadGameLogs() {
     logs.forEach(game => {
       const row = document.createElement("tr");
       const tdDate = document.createElement("td");
-      tdDate.textContent = game.date || "-";
+      tdDate.textContent = (game.date || "-").slice(0, 10);
       tdDate.style.whiteSpace = "nowrap";
       row.appendChild(tdDate);
 

@@ -61,10 +61,10 @@ class DatabaseService:
         base_year = self._config.SEASON_BASE_YEAR
         if season % 2 == 1:
             year = base_year + season // 2
-            return f"{year}-01-01", f"{year}-06-30"
+            return f"{year}-01-01", f"{year}-06-30 23:59:59"
         else:
             year = base_year + (season - 1) // 2
-            return f"{year}-07-01", f"{year}-12-31"
+            return f"{year}-07-01", f"{year}-12-31 23:59:59"
 
     def _season_filter(self, season_param):
         if season_param == "all":

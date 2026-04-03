@@ -75,9 +75,9 @@ async function loadReport() {
       html += `<div class="report-section"><h2>역만 / 삼배만 기록</h2>`;
       data.highlights.forEach(h => {
         const cls = h.tier === "삼배만" ? "hl-sanbaiman" : h.tier === "역만" ? "hl-yakuman" : "hl-double-yakuman";
-        const yakuStr = h.tier.includes("역만") && h.yakus && h.yakus.length > 0 ? ` <span style="font-size:11px;color:var(--color-accent);">(${h.yakus.join(", ")})</span>` : "";
-        const detailBtn = h.ref ? ` <a href="/games/${h.ref}" style="font-size:11px;color:var(--text-link);text-decoration:none;margin-left:4px;">상세 →</a>` : "";
-        html += `<div class="hl-item"><span class="hl-date">${h.date}</span><span class="hl-badge ${cls}">${h.tier}</span><span style="font-weight:500;">${h.player}</span>${yakuStr}${detailBtn}</div>`;
+        const yakuStr = h.tier.includes("역만") && h.yakus && h.yakus.length > 0 ? h.yakus.join(", ") : "";
+        const detailBtn = h.ref ? `<a href="/games/${h.ref}" class="hl-detail">상세 →</a>` : "";
+        html += `<div class="hl-item"><span class="hl-date">${(h.date || "").slice(0, 10)}</span><span class="hl-badge ${cls}">${h.tier}</span><span class="hl-player">${h.player}</span><span class="hl-yaku">${yakuStr}</span>${detailBtn}</div>`;
       });
       html += `</div>`;
     }

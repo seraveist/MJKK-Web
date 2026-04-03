@@ -163,7 +163,7 @@ async function loadTrend() {
     const ctx = document.getElementById("trendChart").getContext("2d");
     if (trendChart) trendChart.destroy();
     trendChart = new Chart(ctx, {
-      type: "line", data: { labels: daily.map(d => d.date), datasets },
+      type: "line", data: { labels: daily.map(d => (d.date || "").slice(0, 10)), datasets },
       options: { responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
         plugins: { legend: { position: "bottom", labels: { font: { size: 11 } } } },
         scales: { x: { ticks: { maxTicksLimit: 10, font: { size: 10 } } }, y: { title: { display: true, text: "누적 우마" } } } },

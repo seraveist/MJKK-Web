@@ -37,7 +37,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 });
 
 function renderTitle(data) {
-  document.getElementById("detailTitle").textContent = `대국 상세 — ${data.date || ""}`;
+  document.getElementById("detailTitle").textContent = `대국 상세 — ${(data.date || "").slice(0, 10)}`;
 }
 
 function renderFinalResult(data) {
