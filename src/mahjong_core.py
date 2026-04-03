@@ -1,5 +1,6 @@
 # src/mahjong_core.py
 from collections import Counter
+import functools
 
 # 상수 정의
 TILE_EAST, TILE_SOUTH, TILE_WEST, TILE_NORTH = 31, 32, 33, 34
@@ -7,7 +8,6 @@ TILE_HAKU, TILE_HATSU, TILE_CHUN = 35, 36, 37
 ALL_TILES = [i for i in range(1, 38) if i % 10 != 0]
 
 def calculate_waiting_tiles(hand_tiles: list, is_number_only: bool = False) -> list:
-    """13장 손패를 받아 대기패 목록과 가상 판수를 반환"""
     if len(hand_tiles) != 13:
         return []
 
@@ -21,10 +21,11 @@ def calculate_waiting_tiles(hand_tiles: list, is_number_only: bool = False) -> l
         if tile_counts[potential_tile] >= 4: continue
             
         tile_counts[potential_tile] += 1
-        if check_agari(tile_counts):
-            # 판수 계산: 실제로는 calculate_yaku_and_han을 호출해야 정확함
-            # 여기서는 대기패 파악이 우선이므로 기본값 1 부여
+        
+        # [변경점] 매번 check_agari를 부르지 않고 캐시된 함수를 부름
+        if _cached_check_agari(tuple(tile_counts)):
             waiting_list.append({'tile': potential_tile, 'han': 1})
+            
         tile_counts[potential_tile] -= 1
 
     return waiting_list
@@ -113,3 +114,8 @@ def decompose_body(tile_counts: list, depth: int) -> bool:
             tile_counts[first_tile] += 1; tile_counts[first_tile+1] += 1; tile_counts[first_tile+2] += 1
             
     return False
+
+@functools.lru_cache(maxsize=131072)
+def _cached_check_agari(tile_counts_tuple: tuple) -> bool:
+    """리스트는 캐싱이 안 되므로 튜플로 변환해서 캐싱하는 안전한 래퍼"""
+    return check_agari(list(tile_counts_tuple))

@@ -1,6 +1,12 @@
 from .mahjong_core import calculate_waiting_tiles, calculate_expected_values
 import re, math
 
+# [추가] 모듈 레벨에서 정규표현식 미리 컴파일 (속도 대폭 향상)
+RE_YAKU_NUM = re.compile(r"\d{1,2}")
+RE_NUM_ONLY = re.compile(r"\d+")
+RE_FAN_NUM = re.compile(r"(\d+)飜")
+RE_FU_NUM = re.compile(r"(\d+)符")
+
 # ---------------------------------------------------------------
 # [Helper Functions] 로그 파싱 및 핸드 복원 (Type-Safe Fix)
 # ---------------------------------------------------------------
@@ -166,7 +172,7 @@ class log(object):
         for lst in self.yakus:
             temp = 0
             for yaku in lst:
-                m = re.findall(r"\d{1,2}", yaku)
+                m = RE_YAKU_NUM.findall(yaku) 
                 if m: temp += int(m[0])
             self._fan.append(temp)
 
@@ -179,7 +185,7 @@ class log(object):
             for lst in self.yakus:
                 d_outer, d_inner, d_akai = 0, 0, 0
                 for yaku in lst:
-                    nums = re.findall(r"\d+", yaku)
+                    nums = RE_NUM_ONLY.findall(yaku)
                     val = int(nums[0]) if nums else 0
 
                     if "Dora" in yaku or "ドラ" in yaku:
@@ -297,12 +303,12 @@ class log(object):
         is_host = self.isHost(player_index)
         
         # 판수 추출
-        fan_match = re.findall(r'(\d+)飜', score_str)
+        fan_match = RE_FAN_NUM.findall(score_str)
         if fan_match:
             fan = int(fan_match[0])
         
         # 부수 추출
-        fu_match = re.findall(r'(\d+)符', score_str)
+        fu_match = RE_FU_NUM.findall(score_str)
         if fu_match:
             fu = int(fu_match[0])
         

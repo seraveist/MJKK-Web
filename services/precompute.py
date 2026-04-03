@@ -58,7 +58,7 @@ def _compute_all_player_stats(game_logs, users=None):
     all_stats = {}
     for name, ps in player_stats.items():
         try:
-            stats = json.loads(ps.json())
+            stats = ps.dict()  # [변경점] 직접 dict() 호출
             stats["rankData"] = ps.rank_history
             games = stats.get("games", 0)
             if games > 0:
@@ -253,7 +253,7 @@ def _compute_stats_from_parsed(parsed_games, users=None):
     all_stats = {}
     for name, ps in player_stats.items():
         try:
-            stats = json.loads(ps.json())
+            stats = ps.dict()  # [변경점] 직접 dict() 호출
             stats["rankData"] = ps.rank_history
             if stats.get("games", 0) > 0:
                 all_stats[name] = stats
