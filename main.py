@@ -105,7 +105,9 @@ def _init_users_from_db(db_service):
         users_col = db_service._db["usersConfig"]
         db_users = list(users_col.find({}, {"_id": 0, "name": 1, "aliases": 1}))
         if db_users:
-            users_module.USERS = db_users
+            # in-place 변경: 다른 모듈이 import한 USERS 참조도 함께 업데이트
+            users_module.USERS.clear()
+            users_module.USERS.extend(db_users)
             logger.info("Loaded %d users from MongoDB", len(db_users))
         else:
             logger.info("No users in MongoDB, using %d defaults", len(users_module.USERS))
