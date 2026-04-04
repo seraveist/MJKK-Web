@@ -78,7 +78,9 @@ def _compute_player_stats_live(data, player_name, count=10):
     if user_index == -1:
         user_index = next((i for i, u in enumerate(USERS) if u["name"] == player_name), 0)
     ps = tenhouStatistics.PlayerStatistic(games=total_games, playerName=USERS[user_index])
-    stats_data = json.loads(ps.json())
+    
+    # [수정] 직렬화 과정 제거
+    stats_data = ps.dict() 
     stats_data["rankData"] = ps.rank_history[-count:] if hasattr(ps, "rank_history") else []
     return stats_data
 
@@ -141,20 +143,12 @@ def get_total_stats_api():
         if not data:
             return jsonify({"error": "No game data found"}), 404
 
-        all_stats = {}
-        players_with_data = []
-        for user in USERS:
-            name = user["name"]
-            try:
-                stats = _compute_player_stats_live(data, name)
-                if stats.get("games", 0) > 0:
-                    all_stats[name] = stats
-                    players_with_data.append(name)
-            except Exception as e:
-                logger.warning("Stats computation failed for %s: %s", name, e)
+        # [핵심 수정] 유저별 루프를 삭제하고 precompute의 single-pass 함수를 호출합니다.
+        from services.precompute import _compute_all_player_stats
+        all_stats = _compute_all_player_stats(data)
+        players_with_data = list(all_stats.keys())
 
         result = {"allPlayers": players_with_data, "stats": all_stats}
-        precompute_for_season(db, season_param)
         cache.set(cache_key, result)
         return jsonify(result)
 
