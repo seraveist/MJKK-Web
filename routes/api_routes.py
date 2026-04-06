@@ -73,7 +73,10 @@ def get_ranking():
 # ==================================================================
 
 def _compute_player_stats_live(data, player_name, count=10):
-    total_games = [tenhouLog.game(log) for log in data]
+    # [수정] 다중 시즌 로그를 시간순으로 정렬해야 순위 그래프(rankData)가 올바르게 생성됩니다.
+    data_sorted = sorted(data, key=lambda x: x.get("title", ["", ""])[1] if len(x.get("title", [])) > 1 else "")
+    
+    total_games = [tenhouLog.game(log) for log in data_sorted]
     user_index = find_user_index(USERS, player_name)
     if user_index == -1:
         user_index = next((i for i, u in enumerate(USERS) if u["name"] == player_name), 0)
@@ -906,10 +909,21 @@ def get_profile(player_name):
         season_param = request.args.get("season", str(db.get_current_season()))
         import statistics as stat_mod
 
+        # 1. 사전 계산 데이터 조회 시도
         precomputed = get_precomputed_stats(db, season_param)
         stats = precomputed.get("stats", {}) if precomputed else {}
 
+        # 2. [핵심 추가] 데이터가 없으면 실시간으로 로그를 긁어와 계산
+        if not stats:
+            # 여러 시즌의 로그를 한 번에 가져옴
+            data = db.fetch_game_logs_for_stats(season_param)
+            if data:
+                from services.precompute import _compute_all_player_stats
+                # Single-pass 방식으로 리그 전체 유저의 통계를 즉석 생성
+                stats = _compute_all_player_stats(data)
+
         player_stats = stats.get(player_name)
+        # 3. 실시간 계산 후에도 데이터가 없다면 그때 404 반환
         if not player_stats or player_stats.get("games", 0) == 0:
             return jsonify({"error": "No data"}), 404
 
