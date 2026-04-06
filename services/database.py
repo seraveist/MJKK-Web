@@ -106,7 +106,17 @@ class DatabaseService:
 
         cache.set(cache_key, data)
         return data
-
+        
+# services/database.py 에 추가 제안
+def fetch_game_logs_paged(self, season_param, page=1, per_page=30):
+    query = self._season_filter(season_param)
+    # DB 서버 내에서 정렬 -> 건너뛰기 -> 30개만 가져오기 수행
+    cursor = self.collection.find(query) \
+                 .sort("title.1", -1) \
+                 .skip((page - 1) * per_page) \
+                 .limit(per_page)
+    return list(cursor)
+    
     def fetch_game_logs_for_stats(self, season_param):
         cache_key = make_cache_key("stats_logs", season_param)
         cached = cache.get(cache_key)
