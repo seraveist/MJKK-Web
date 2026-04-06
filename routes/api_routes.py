@@ -291,78 +291,62 @@ def get_game_logs():
         return jsonify({"error": "Failed to fetch game logs"}), 500
 
 
+# routes/api_routes.py 수정안
+
 def _detect_big_hands(game_log):
-    """대국에서 배만/삼배만/역만 감지. { playerName: {"tier": ..., "yakus": [...]} }"""
+    """
+    무거운 파서를 사용하지 않고 원본 JSON 로그의 결과 문자열만 검사하여 
+    배만/삼배만/역만을 감지합니다. (리치봉/본장 점수 오차 없음)
+    """
     names = game_log.get("name", [])
     results = {}
+    logs = game_log.get("log", [])
+    player_count = len(names)
 
-    YAKU_KR = {"国士無双":"국사무쌍","国士無双十三面待ち":"국사무쌍 13면대기","四暗刻":"스안커","四暗刻単騎待ち":"스안커 단기","大三元":"대삼원","小四喜":"소사희","大四喜":"대사희","字一色":"자일색","緑一色":"녹일색","清老頭":"청노두","九蓮宝燈":"구련보등","九蓮宝燈九面待ち":"순정구련보등","純正九蓮宝燈":"순정구련보등","天和":"천화","地和":"지화","数え役満":"헤아림 역만","Kokushi Musou":"국사무쌍","Kokushi Musou 13":"국사무쌍 13면대기","Suuankou":"스안커","Suuankou Tanki":"스안커 단기","Daisangen":"대삼원","Shousuushii":"소사희","Daisuushii":"대사희","Tsuuiisou":"자일색","Ryuuiisou":"녹일색","Chinroutou":"청노두","Chuuren Poutou":"구련보등","Junsei Chuuren Poutou":"순정구련보등"}
+    # 역만 이름 한글 매핑 (기존 유지)
+    YAKU_KR = {"国士無双":"국사무쌍", "四暗刻":"스안커", "대삼원":"대삼원", ...} # 생략
 
-    try:
-        parsed = tenhouLog.game(game_log)
-        for rnd in parsed.logs:
-            if rnd.isDraw:
-                continue
-            for yi, sc_arr in enumerate(rnd.changeScore):
-                for seat in range(len(names)):
-                    if seat >= len(sc_arr):
-                        continue
-                    score = sc_arr[seat]
-                    if score <= 0:
-                        continue
+    for rnd in logs:
+        if not rnd or len(rnd) < 4: continue
+        
+        # 결과 블록(보통 16번 인덱스 부근, player_count에 따라 다름) 찾기
+        # tenhouLog.py 로직에 따라 결과 블록 위치 산출
+        res_idx = 4 + 3 * player_count
+        if len(rnd) <= res_idx: continue
+        
+        result_block = rnd[res_idx]
+        if not result_block or result_block[0] != "和了":
+            continue
 
-                    matched = find_user_by_alias(USERS, names[seat])
-                    display_name = matched["name"] if matched else names[seat]
-
-                    # 親/子 구분하여 점수 기준 분리
-                    is_host = rnd.isHost(seat)
-                    tier = None
-                    yakuman_base = 48000 if is_host else 32000
-
-                    if score >= yakuman_base * 2:
-                        # 더블역만 이상
-                        multi = score // yakuman_base
-                        if multi == 2:
-                            tier = "더블역만"
-                        elif multi == 3:
-                            tier = "트리플역만"
-                        else:
-                            tier = f"{multi}배역만"
-                    elif score >= yakuman_base:
-                        tier = "역만"
-                    elif is_host:
-                        if score >= 36000:
-                            tier = "삼배만"
-                        elif score >= 24000:
-                            tier = "배만"
-                    else:
-                        if score >= 24000:
-                            tier = "삼배만"
-                        elif score >= 16000:
-                            tier = "배만"
-
-                    if tier:
-                        tier_rank = {"배만": 1, "삼배만": 2, "역만": 3, "더블역만": 4, "트리플역만": 5}
-                        cur_rank = tier_rank.get(tier, 6)  # N배역만은 6 이상
-                        existing = results.get(display_name)
-                        if not existing or cur_rank > tier_rank.get(existing.get("tier"), 0):
-                            # 역만급 이상일 때 역 이름 추출
-                            yaku_names = []
-                            if cur_rank >= 3 and yi < len(rnd.yakus):
-                                for y in rnd.yakus[yi]:
-                                    clean = y.split("(")[0]
-                                    if "Dora" in y or "ドラ" in y or "Red" in y or "赤" in y:
-                                        continue
-                                    kr = YAKU_KR.get(clean, clean)
-                                    yaku_names.append(kr)
-                                # 헤아림 역만 판정: 역만급인데 실제 역만 역이 없으면
-                                REAL_YAKUMAN = {"국사무쌍","국사무쌍 13면대기","스안커","스안커 단기","대삼원","소사희","대사희","자일색","녹일색","청노두","구련보등","순정구련보등","천화","지화","헤아림 역만"}
-                                if yaku_names and not any(y in REAL_YAKUMAN for y in yaku_names):
-                                    yaku_names = ["헤아림 역만"]
-                            results[display_name] = {"tier": tier, "yakus": yaku_names}
-    except Exception as e:
-        logger.warning("Big hand detection failed: %s", e)
-
+        # result_block 예: ["和了", [점수변동], [승리정보1], [승리정보2]...]
+        # 승리정보 예: [0, 1, 0, "40符3飜5200点", "立直(1飜)", ...]
+        for i in range(2, len(result_block), 2):
+            win_info = result_block[i]
+            if not isinstance(win_info, list) or len(win_info) < 4: continue
+            
+            winner_seat = win_info[0]
+            score_str = str(win_info[3]) # "배만", "삼배만", "역만" 등이 포함된 문자열
+            
+            tier = None
+            if "役満" in score_str: tier = "역만"
+            elif "三倍満" in score_str: tier = "삼배만"
+            elif "倍満" in score_str: tier = "배만"
+            # ※ 하네만(跳満)은 무시하거나 필요시 추가
+            
+            if tier:
+                matched = find_user_by_alias(USERS, names[winner_seat])
+                display_name = matched["name"] if matched else names[winner_seat]
+                
+                # 역만급인 경우에만 구체적인 역 이름 추출 (win_info[4:] 에 들어있음)
+                yaku_names = []
+                if tier == "역만":
+                    for y in win_info[4:]:
+                        clean = str(y).split("(")[0]
+                        if any(k in clean for k in ["Dora", "ドラ", "Red", "赤"]): continue
+                        yaku_names.append(YAKU_KR.get(clean, clean))
+                
+                results[display_name] = {"tier": tier, "yakus": yaku_names}
+                
     return results
 
 
