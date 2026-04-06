@@ -291,20 +291,20 @@ def get_game_logs():
 # routes/api_routes.py 수정안
 def _detect_big_hands(game_log):
     """
-    무거운 파서를 사용하지 않고 원본 JSON 로그의 결과 문자열만 검사하여 
-    배만/삼배만/역만을 감지합니다. (리치봉/본장 점수 오차 없음)
+    무거운 파서 없이 원본 로그 분석.
+    점수(Score)와 문자열을 결합하여 더블/트리플역만을 정확히 감지합니다.
     """
     names = game_log.get("name", [])
     results = {}
     logs = game_log.get("log", [])
     player_count = len(names)
 
-    # 역 이름 한글 매핑 전체 목록
+    # 역 이름 한글 매핑 (누락 없이 전체 포함)
     YAKU_KR = {
         "国士無双": "국사무쌍", "国士無双十三面待ち": "국사무쌍 13면대기",
-        "四暗刻": "스안커", "四暗刻単騎待ち": "스안커 단기",
-        "大三원": "대삼원", "小四喜": "소사희", "大四喜": "대사희",
-        "字一色": "자일색", "緑一色": "녹일색", "清老頭": "청노두",
+        "四暗刻": "스안커", "四暗刻単기대기": "스안커 단기",
+        "大三元": "대삼원", "小四喜": "소사희", "大四喜": "대사희",
+        "字一色": "자일색", "緑이색": "녹일색", "清老頭": "청노두",
         "九蓮宝燈": "구련보등", "九蓮宝燈九面待ち": "순정구련보등",
         "純正九蓮宝燈": "순정구련보등", "天和": "천화", "地和": "지화",
         "数え役満": "헤아림 역만",
@@ -315,65 +315,74 @@ def _detect_big_hands(game_log):
         "Chuuren Poutou": "구련보등", "Junsei Chuuren Poutou": "순정구련보등"
     }
 
+    # 실제 역만 역 목록
+    REAL_YAKUMAN = {
+        "국사무쌍", "국사무쌍 13면대기", "스안커", "스안커 단기", "대삼원", "소사희", "대사희",
+        "자일색", "녹일색", "청노두", "구련보등", "순정구련보등", "천화", "지화", "헤아림 역만"
+    }
+
     for rnd in logs:
-        if not rnd or len(rnd) < 4:
-            continue
+        if not rnd or len(rnd) < 4: continue
         
-        # 결과 블록 위치 산출 (tenhouLog 파서와 동일한 로직)
+        # 해당 국의 오야(Dealer) 인덱스 계산
+        dealer_seat = rnd[0][0] % 4
+        
         res_idx = 4 + 3 * player_count
-        if len(rnd) <= res_idx:
-            continue
+        if len(rnd) <= res_idx: continue
         
         result_block = rnd[res_idx]
-        if not result_block or result_block[0] != "和了":
-            continue
+        if not result_block or result_block[0] != "和了": continue
 
-        # result_block[2::2]는 각 화료자(더블론 등 대응)의 상세 정보 배열입니다.
+        # 화료 정보 처리 (더블론 대응)
         for i in range(2, len(result_block), 2):
             win_info = result_block[i]
-            if not isinstance(win_info, list) or len(win_info) < 4:
-                continue
+            score_changes = result_block[i-1] # 해당 화료로 인한 점수 변동 리스트
+            if not isinstance(win_info, list) or len(win_info) < 4: continue
             
             winner_seat = win_info[0]
-            score_str = str(win_info[3]) # 예: "40符13飜32000点 役満"
+            win_score = score_changes[winner_seat] # 실제 획득 점수
+            is_host = (winner_seat == dealer_seat)
+            
+            # 역만 기준 점수 설정
+            yakuman_base = 48000 if is_host else 32000
+            
+            # 1. 점수 기반 티어 판정 (가장 정확함)
+            # 리치봉 등을 제외한 순수 점수 배수를 확인하기 위해 정수 나눗셈 사용
+            multi = win_score // yakuman_base
             
             tier = None
-            # 배수 역만 및 등급 판정
-            if "役満" in score_str:
-                import re
-                multi_match = re.search(r'(\d+)倍役満', score_str)
-                if multi_match:
-                    n = int(multi_match.group(1))
-                    tier = "더블역만" if n == 2 else "트리플역만" if n == 3 else f"{n}배역만"
-                elif "ダブル役満" in score_str:
-                    tier = "더블역만"
-                else:
-                    tier = "역만"
-            elif "三倍満" in score_str:
-                tier = "삼배만"
-            elif "倍満" in score_str:
-                tier = "배만"
-            
+            if multi >= 4: tier = f"{multi}배역만"
+            elif multi == 3: tier = "트리플역만"
+            elif multi == 2: tier = "더블역만"
+            elif multi == 1: tier = "역만"
+            else:
+                # 역만 미만은 기존처럼 문자열로 판정
+                score_str = str(win_info[3])
+                if "三倍満" in score_str: tier = "삼배만"
+                elif "倍満" in score_str: tier = "배만"
+
             if tier:
                 matched = find_user_by_alias(USERS, names[winner_seat])
                 display_name = matched["name"] if matched else names[winner_seat]
                 
-                # 역 이름 추출 (win_info[4:]부터 역 이름들이 나열됨)
+                # 2. 역 이름 수집
                 yaku_names = []
-                # 역만급 이상일 때만 구체적인 역 이름들을 수집
                 if "역만" in tier:
                     for y in win_info[4:]:
-                        # "역이름(판수)" 형태에서 이름만 추출
                         clean = str(y).split("(")[0]
-                        # 도라 및 아카도라는 제외
-                        if any(k in clean for k in ["Dora", "ドラ", "Red", "赤"]):
-                            continue
+                        if any(k in clean for k in ["Dora", "ドラ", "Red", "赤"]): continue
                         yaku_names.append(YAKU_KR.get(clean, clean))
-                
-                # 더 높은 등급의 화료가 이미 기록되어 있지 않은 경우에만 업데이트
+                    
+                    # 3. 헤아림 역만 판정
+                    if yaku_names and not any(y in REAL_YAKUMAN for y in yaku_names):
+                        yaku_names = ["헤아림 역만"]
+
+                # 4. 결과 저장 (한 대국 내 최고 등급 우선)
                 existing = results.get(display_name)
                 tier_rank = {"배만": 1, "삼배만": 2, "역만": 3, "더블역만": 4, "트리플역만": 5}
-                if not existing or tier_rank.get(tier, 0) > tier_rank.get(existing["tier"], 0):
+                cur_rank = tier_rank.get(tier, 6) # 4배역만 이상은 6 이상
+                
+                if not existing or cur_rank > tier_rank.get(existing["tier"], 0):
                     results[display_name] = {"tier": tier, "yakus": yaku_names}
                 
     return results
