@@ -398,7 +398,7 @@ def _detect_big_hands(game_log):
             score_str = str(win_info[3]) if len(win_info) > 3 else ""
             tier = _determine_tier(win_score, is_host, score_str)
 
-            if tier:
+            if tier and tier not in ("만관", "하네만"):
                 matched = find_user_by_alias(USERS, names[winner_seat])
                 display_name = matched["name"] if matched else names[winner_seat]
 
