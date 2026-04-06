@@ -20,6 +20,47 @@ logger = logging.getLogger(__name__)
 api_bp = Blueprint("api", __name__)
 
 
+# ==================================================================
+# 공통 유틸: tier 판정
+# ==================================================================
+
+def _determine_tier(win_score, is_host, score_str=""):
+    """
+    화료 점수와 오야 여부로 tier를 판정.
+    점수 판정 불가 시 score_str 문자열로 fallback.
+    """
+    yakuman_base = 48000 if is_host else 32000
+    if win_score > 0 and win_score >= yakuman_base:
+        multi = win_score // yakuman_base
+        if multi >= 4: return f"{multi}배역만"
+        if multi == 3: return "트리플역만"
+        if multi == 2: return "더블역만"
+        return "역만"
+
+    if win_score > 0:
+        sanbaiman_base = 36000 if is_host else 24000
+        baiman_base = 24000 if is_host else 16000
+        if win_score >= sanbaiman_base: return "삼배만"
+        if win_score >= baiman_base: return "배만"
+
+    # 문자열 fallback (점수 판정 불가 시)
+    if score_str:
+        ym = re.findall(r'(\d+)倍役満', score_str)
+        if ym:
+            n = int(ym[0])
+            if n == 2: return "더블역만"
+            if n == 3: return "트리플역만"
+            return f"{n}배역만"
+        if 'ダブル役満' in score_str: return "더블역만"
+        if 'トリプル役満' in score_str: return "트리플역만"
+        if '役満' in score_str: return "역만"
+        if '三倍満' in score_str: return "삼배만"
+        if '倍満' in score_str: return "배만"
+        if '跳満' in score_str: return "하네만"
+        if '満貫' in score_str: return "만관"
+    return ""
+
+
 def _get_db():
     return current_app.config["DB_SERVICE"]
 
@@ -354,24 +395,8 @@ def _detect_big_hands(game_log):
             win_score = score_changes[winner_seat] if winner_seat < len(score_changes) else 0
             is_host = (winner_seat == dealer_seat)
 
-            yakuman_base = 48000 if is_host else 32000
-
-            multi = win_score // yakuman_base
-            tier = None
-            if multi >= 4:
-                tier = f"{multi}배역만"
-            elif multi == 3:
-                tier = "트리플역만"
-            elif multi == 2:
-                tier = "더블역만"
-            elif multi == 1:
-                tier = "역만"
-            else:
-                score_str = str(win_info[3])
-                if "三倍満" in score_str:
-                    tier = "삼배만"
-                elif "倍満" in score_str:
-                    tier = "배만"
+            score_str = str(win_info[3]) if len(win_info) > 3 else ""
+            tier = _determine_tier(win_score, is_host, score_str)
 
             if tier:
                 matched = find_user_by_alias(USERS, names[winner_seat])
@@ -493,7 +518,7 @@ def get_game_detail(ref):
                             if fu_m:
                                 fu_val = int(fu_m[0])
 
-                            # [패치#9] 점수 기반 우선 판정 (gamelogs와 일관)
+                            # 점수 추출 + _determine_tier 공통 함수 호출
                             win_seat = entry[0] if len(entry) > 0 else -1
                             win_score = 0
                             try:
@@ -504,36 +529,7 @@ def get_game_detail(ref):
                                 pass
 
                             is_host = (win_seat == dealer_seat)
-                            yakuman_base = 48000 if is_host else 32000
-
-                            if win_score > 0 and win_score >= yakuman_base:
-                                multi = win_score // yakuman_base
-                                if multi >= 4: tier = f"{multi}배역만"
-                                elif multi == 3: tier = "트리플역만"
-                                elif multi == 2: tier = "더블역만"
-                                else: tier = "역만"
-                            else:
-                                # 문자열 fallback
-                                ym_multi = re.findall(r'(\d+)倍役満', score_str)
-                                if ym_multi:
-                                    n = int(ym_multi[0])
-                                    if n == 2: tier = "더블역만"
-                                    elif n == 3: tier = "트리플역만"
-                                    else: tier = f"{n}배역만"
-                                elif 'ダブル役満' in score_str:
-                                    tier = "더블역만"
-                                elif 'トリプル役満' in score_str:
-                                    tier = "트리플역만"
-                                elif '役満' in score_str:
-                                    tier = "역만"
-                                elif '三倍満' in score_str:
-                                    tier = "삼배만"
-                                elif '倍満' in score_str:
-                                    tier = "배만"
-                                elif '跳満' in score_str:
-                                    tier = "하네만"
-                                elif '満貫' in score_str:
-                                    tier = "만관"
+                            tier = _determine_tier(win_score, is_host, score_str)
                             han_fu_info.append({"han": han_val, "fu": fu_val, "tier": tier})
                 except Exception:
                     pass
