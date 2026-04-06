@@ -302,23 +302,24 @@ def _detect_big_hands(game_log):
     # 역 이름 한글 매핑 (누락 없이 전체 포함)
     YAKU_KR = {
         "国士無双": "국사무쌍", "国士無双十三面待ち": "국사무쌍 13면대기",
-        "四暗刻": "스안커", "四暗刻単기대기": "스안커 단기",
+        "四暗刻": "스안커", "四暗刻単騎": "스안커 단기", "四槓子": "스깡즈",
         "大三元": "대삼원", "小四喜": "소사희", "大四喜": "대사희",
-        "字一色": "자일색", "緑이색": "녹일색", "清老頭": "청노두",
-        "九蓮宝燈": "구련보등", "九蓮宝燈九面待ち": "순정구련보등",
-        "純正九蓮宝燈": "순정구련보등", "天和": "천화", "地和": "지화",
+        "字一色": "자일색", "緑一色": "녹일색", "清老頭": "청노두",
+        "九蓮宝燈": "구련보등", "純正九蓮宝燈": "순정구련보등",
+        "天和": "천화", "地和": "지화",
         "数え役満": "헤아림 역만",
-        "Kokushi Musou": "국사무쌍", "Kokushi Musou 13": "국사무쌍 13면대기",
-        "Suuankou": "스안커", "Suuankou Tanki": "스안커 단기",
-        "Daisangen": "대삼원", "Shousuushii": "소사희", "Daisuushii": "대사희",
-        "Tsuuiisou": "자일색", "Ryuuiisou": "녹일색", "Chinroutou": "청노두",
-        "Chuuren Poutou": "구련보등", "Junsei Chuuren Poutou": "순정구련보등"
+        "Thirteen Orphans": "국사무쌍", "Thirteen-wait Thirteen Orphans": "국사무쌍 13면대기",
+        "Four Concealed Triplets": "스안커", "Single-wait Four Concealed Triplets": "스안커 단기", "Four Quads": "스깡즈",
+        "Big Three Dragons": "대삼원", "Four Little Winds": "소사희", "Four Big Winds": "대사희",
+        "All Honors": "자일색", "All Green": "녹일색", "All Terminals": "청노두",
+        "Nine Gates": "구련보등", "True Nine Gates": "순정구련보등",
+        "Blessing of Heaven": "천화", "Blessing of Earth": "지화"
     }
 
     # 실제 역만 역 목록
     REAL_YAKUMAN = {
         "국사무쌍", "국사무쌍 13면대기", "스안커", "스안커 단기", "대삼원", "소사희", "대사희",
-        "자일색", "녹일색", "청노두", "구련보등", "순정구련보등", "천화", "지화", "헤아림 역만"
+        "자일색", "녹일색", "청노두", "구련보등", "순정구련보등", "천화", "지화", "스깡즈", "헤아림 역만"
     }
 
     for rnd in logs:
