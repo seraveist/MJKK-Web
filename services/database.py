@@ -107,27 +107,40 @@ class DatabaseService:
         cache.set(cache_key, data)
         return data
         
-# services/database.py 에 추가 제안
-def fetch_game_logs_paged(self, season_param, page=1, per_page=30):
-    query = self._season_filter(season_param)
-    # DB 서버 내에서 정렬 -> 건너뛰기 -> 30개만 가져오기 수행
-    cursor = self.collection.find(query) \
-                 .sort("title.1", -1) \
-                 .skip((page - 1) * per_page) \
-                 .limit(per_page)
-    return list(cursor)
+    # services/database.py 에 추가/수정
     
-    def fetch_game_logs_for_stats(self, season_param):
-        cache_key = make_cache_key("stats_logs", season_param)
-        cached = cache.get(cache_key)
-        if cached is not None:
-            return cached
-
+    def fetch_game_logs_paged(self, season_param, page=1, per_page=30, filters=None):
+        """
+        시즌 필터와 추가 필터(날짜, 유저)를 결합하여 
+        DB 레벨에서 정렬 및 페이징된 데이터를 가져옵니다.
+        """
+        # 1. 기본 시즌 필터 생성
         query = self._season_filter(season_param)
-        data = list(self._collection.find(query, STATS_PROJECTION))
-
-        cache.set(cache_key, data, ttl=600)
-        return data
+        
+        # 2. 추가 필터(날짜, 유저) 반영
+        if filters:
+            if filters.get('date_from') or filters.get('date_to'):
+                date_query = {}
+                if filters.get('date_from'):
+                    date_query["$gte"] = filters['date_from']
+                if filters.get('date_to'):
+                    date_query["$lte"] = filters['date_to']
+                query["title.1"] = date_query
+                
+            if filters.get('aliases'):
+                # 유저의 모든 별명 중 하나라도 포함된 게임 검색
+                query["name"] = {"$in": list(filters['aliases'])}
+    
+        # 3. DB 쿼리 실행 (정렬 -> 건너뛰기 -> 제한)
+        cursor = self.collection.find(query) \
+                     .sort("title.1", -1) \
+                     .skip((page - 1) * per_page) \
+                     .limit(per_page)
+                     
+        # 4. 전체 매칭 개수 조회 (페이지네이션 계산용)
+        total_count = self.collection.count_documents(query)
+        
+        return list(cursor), total_count
 
     def insert_game_log(self, game_log):
         try:
