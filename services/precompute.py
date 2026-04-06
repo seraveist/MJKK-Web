@@ -58,7 +58,7 @@ def _compute_all_player_stats(game_logs, users=None):
     all_stats = {}
     for name, ps in player_stats.items():
         try:
-            stats = ps.dict()  # [변경점] 직접 dict() 호출
+            stats = json.loads(ps.json())
             stats["rankData"] = ps.rank_history
             games = stats.get("games", 0)
             if games > 0:
@@ -156,41 +156,58 @@ def _invalidate_elo_cache(db_service, season):
 
 def _invalidate_season_cache(cache, season):
     """
-    [개선] 해당 시즌 관련 캐시 키만 선별 무효화.
-    - 해당 시즌의 player_stats, total_stats, ranking 등
-    - 'all' 시즌 캐시도 함께 무효화 (전체 통계에 영향)
-    - 다른 시즌 캐시는 유지 → 캐시 히트율 보존
+    [개선#10] 해당 시즌 관련 캐시 무효화.
+    make_cache_key를 직접 호출하여 키 생성 로직 동기화.
     """
-    import hashlib
+    from services.cache import make_cache_key
+    from config.users import USERS
 
-    # make_cache_key는 MD5 해시를 쓰므로, 패턴 매칭 불가
-    # 대신 알려진 키 패턴들을 직접 무효화
     seasons_to_invalidate = [season, "all"]
-
     invalidated = 0
+
     for s in seasons_to_invalidate:
-        # player_stats 캐시 (모든 플레이어)
-        from config.users import USERS
+        # player_stats (모든 유저 × 모든 count 조합)
         for user in USERS:
-            for count in [10, 50, 100]:
-                key = hashlib.md5(
-                    f"player_stats:{user['name']}:{s}:{count}".encode()
-                ).hexdigest()
+            for count in [10, 20, 50, 100]:
+                key = make_cache_key("player_stats", user['name'], s, count)
                 if cache.get(key) is not None:
                     cache.delete(key)
                     invalidated += 1
 
-        # total_stats 캐시
-        key = hashlib.md5(f"total_stats:{s}".encode()).hexdigest()
+        # total_stats
+        key = make_cache_key("total_stats", s)
         if cache.get(key) is not None:
             cache.delete(key)
             invalidated += 1
 
+        # game_logs (lightweight True/False)
+        for lw in [True, False]:
+            key = make_cache_key("game_logs", s, lw)
+            if cache.get(key) is not None:
+                cache.delete(key)
+                invalidated += 1
+
+        # stats_logs (전용 TTL 캐시)
+        key = make_cache_key("stats_logs", s)
+        if cache.get(key) is not None:
+            cache.delete(key)
+            invalidated += 1
+
+        # profile_stats (다중시즌 프로파일 캐시)
+        key = make_cache_key("profile_stats", s)
+        if cache.get(key) is not None:
+            cache.delete(key)
+            invalidated += 1
+
+        # profile (모든 유저)
+        for user in USERS:
+            key = make_cache_key("profile", user['name'], s)
+            if cache.get(key) is not None:
+                cache.delete(key)
+                invalidated += 1
+
     if invalidated > 0:
-        logger.info(
-            "Selective cache invalidation: %d keys for seasons %s",
-            invalidated, seasons_to_invalidate,
-        )
+        logger.info("Selective cache invalidation: %d keys for seasons %s", invalidated, seasons_to_invalidate)
 
 
 def _background_precompute_all(db_service):
@@ -253,7 +270,7 @@ def _compute_stats_from_parsed(parsed_games, users=None):
     all_stats = {}
     for name, ps in player_stats.items():
         try:
-            stats = ps.dict()  # [변경점] 직접 dict() 호출
+            stats = json.loads(ps.json())
             stats["rankData"] = ps.rank_history
             if stats.get("games", 0) > 0:
                 all_stats[name] = stats

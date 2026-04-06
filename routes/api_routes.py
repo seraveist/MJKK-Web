@@ -73,17 +73,12 @@ def get_ranking():
 # ==================================================================
 
 def _compute_player_stats_live(data, player_name, count=10):
-    # [수정] 다중 시즌 로그를 시간순으로 정렬해야 순위 그래프(rankData)가 올바르게 생성됩니다.
-    data_sorted = sorted(data, key=lambda x: x.get("title", ["", ""])[1] if len(x.get("title", [])) > 1 else "")
-    
-    total_games = [tenhouLog.game(log) for log in data_sorted]
+    total_games = [tenhouLog.game(log) for log in data]
     user_index = find_user_index(USERS, player_name)
     if user_index == -1:
         user_index = next((i for i, u in enumerate(USERS) if u["name"] == player_name), 0)
     ps = tenhouStatistics.PlayerStatistic(games=total_games, playerName=USERS[user_index])
-    
-    # [수정] 직렬화 과정 제거
-    stats_data = ps.dict() 
+    stats_data = json.loads(ps.json())
     stats_data["rankData"] = ps.rank_history[-count:] if hasattr(ps, "rank_history") else []
     return stats_data
 
@@ -146,12 +141,20 @@ def get_total_stats_api():
         if not data:
             return jsonify({"error": "No game data found"}), 404
 
-        # [핵심 수정] 유저별 루프를 삭제하고 precompute의 single-pass 함수를 호출합니다.
-        from services.precompute import _compute_all_player_stats
-        all_stats = _compute_all_player_stats(data)
-        players_with_data = list(all_stats.keys())
+        all_stats = {}
+        players_with_data = []
+        for user in USERS:
+            name = user["name"]
+            try:
+                stats = _compute_player_stats_live(data, name)
+                if stats.get("games", 0) > 0:
+                    all_stats[name] = stats
+                    players_with_data.append(name)
+            except Exception as e:
+                logger.warning("Stats computation failed for %s: %s", name, e)
 
         result = {"allPlayers": players_with_data, "stats": all_stats}
+        precompute_for_season(db, season_param)
         cache.set(cache_key, result)
         return jsonify(result)
 
@@ -224,14 +227,14 @@ def get_game_logs():
             "aliases": None
         }
 
-        # 2. 유저 필터 처리 (별명 세트 구성)
+        # 2. 유저 필터 처리
         if player_filter:
             user = find_user_by_alias(USERS, player_filter) or \
                    next((u for u in USERS if u["name"] == player_filter), None)
             if user:
                 filters["aliases"] = set(user.get("aliases", [player_filter]))
 
-        # 3. [핵심] DB 레벨에서 필터링 + 페이징된 데이터 가져오기
+        # 3. DB 레벨 필터링 + 페이징
         page_data, total = db.fetch_game_logs_paged(
             season_param, page=page, per_page=per_page, filters=filters
         )
@@ -239,7 +242,6 @@ def get_game_logs():
         if not page_data and page == 1:
             return jsonify({"error": "No game data found"}), 404
 
-        # 4. 페이지네이션 정보 계산
         total_pages = max(1, (total + per_page - 1) // per_page)
         page = max(1, min(page, total_pages))
 
@@ -250,7 +252,6 @@ def get_game_logs():
             names = game_log.get("name", [])
             sc = game_log.get("sc", [])
 
-            # 플레이어 정보 정리 (이 부분은 가벼우므로 유지)
             players = []
             for i in range(min(4, len(names))):
                 score = sc[i * 2] if i * 2 < len(sc) else 0
@@ -260,7 +261,6 @@ def get_game_logs():
                 players.append({"name": display_name, "score": score, "point": point})
             players.sort(key=lambda p: -p["score"])
 
-            # [최적화 적용] 무거운 파서 없이 원본 로그 분석
             big_hands = _detect_big_hands(game_log)
 
             logs.append({
@@ -286,109 +286,115 @@ def get_game_logs():
             "season_dates": season_dates,
         })
 
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
         logger.error("Error fetching game logs", exc_info=e)
         return jsonify({"error": "Failed to fetch game logs"}), 500
 
 
-# routes/api_routes.py 수정안
 def _detect_big_hands(game_log):
     """
-    무거운 파서 없이 원본 로그 분석.
-    점수(Score)와 문자열을 결합하여 더블/트리플역만을 정확히 감지합니다.
+    원본 로그에서 직접 배만/삼배만/역만 감지. tenhouLog 파서 불필요.
     """
     names = game_log.get("name", [])
     results = {}
     logs = game_log.get("log", [])
     player_count = len(names)
 
-    # 역 이름 한글 매핑 (누락 없이 전체 포함)
+    # [패치#5] log가 비어있으면 즉시 리턴
+    if not logs or not names:
+        return results
+
     YAKU_KR = {
         "国士無双": "국사무쌍", "国士無双十三面待ち": "국사무쌍 13면대기",
-        "四暗刻": "스안커", "四暗刻単騎": "스안커 단기", "四槓子": "스깡즈",
+        "四暗刻": "스안커", "四暗刻単騎": "스안커 단기", "四暗刻単騎待ち": "스안커 단기", "四槓子": "스깡즈",
         "大三元": "대삼원", "小四喜": "소사희", "大四喜": "대사희",
         "字一色": "자일색", "緑一色": "녹일색", "清老頭": "청노두",
-        "九蓮宝燈": "구련보등", "純正九蓮宝燈": "순정구련보등",
-        "天和": "천화", "地和": "지화",
-        "数え役満": "헤아림 역만",
+        "九蓮宝燈": "구련보등", "九蓮宝燈九面待ち": "순정구련보등", "純正九蓮宝燈": "순정구련보등",
+        "天和": "천화", "地和": "지화", "数え役満": "헤아림 역만",
+        "Kokushi Musou": "국사무쌍", "Kokushi Musou 13": "국사무쌍 13면대기",
+        "Suuankou": "스안커", "Suuankou Tanki": "스안커 단기",
+        "Daisangen": "대삼원", "Shousuushii": "소사희", "Daisuushii": "대사희",
+        "Tsuuiisou": "자일색", "Ryuuiisou": "녹일색", "Chinroutou": "청노두",
+        "Chuuren Poutou": "구련보등", "Junsei Chuuren Poutou": "순정구련보등",
         "Thirteen Orphans": "국사무쌍", "Thirteen-wait Thirteen Orphans": "국사무쌍 13면대기",
         "Four Concealed Triplets": "스안커", "Single-wait Four Concealed Triplets": "스안커 단기", "Four Quads": "스깡즈",
         "Big Three Dragons": "대삼원", "Four Little Winds": "소사희", "Four Big Winds": "대사희",
         "All Honors": "자일색", "All Green": "녹일색", "All Terminals": "청노두",
         "Nine Gates": "구련보등", "True Nine Gates": "순정구련보등",
-        "Blessing of Heaven": "천화", "Blessing of Earth": "지화"
+        "Blessing of Heaven": "천화", "Blessing of Earth": "지화",
     }
 
-    # 실제 역만 역 목록
     REAL_YAKUMAN = {
         "국사무쌍", "국사무쌍 13면대기", "스안커", "스안커 단기", "대삼원", "소사희", "대사희",
         "자일색", "녹일색", "청노두", "구련보등", "순정구련보등", "천화", "지화", "스깡즈", "헤아림 역만"
     }
 
     for rnd in logs:
-        if not rnd or len(rnd) < 4: continue
-        
-        # 해당 국의 오야(Dealer) 인덱스 계산
-        dealer_seat = rnd[0][0] % 4
-        
-        res_idx = 4 + 3 * player_count
-        if len(rnd) <= res_idx: continue
-        
-        result_block = rnd[res_idx]
-        if not result_block or result_block[0] != "和了": continue
+        if not rnd or len(rnd) < 4:
+            continue
 
-        # 화료 정보 처리 (더블론 대응)
+        dealer_seat = rnd[0][0] % 4
+        res_idx = 4 + 3 * player_count
+        if len(rnd) <= res_idx:
+            continue
+
+        result_block = rnd[res_idx]
+        if not result_block or result_block[0] != "和了":
+            continue
+
         for i in range(2, len(result_block), 2):
             win_info = result_block[i]
-            score_changes = result_block[i-1] # 해당 화료로 인한 점수 변동 리스트
-            if not isinstance(win_info, list) or len(win_info) < 4: continue
-            
+            score_changes = result_block[i - 1]
+            if not isinstance(win_info, list) or len(win_info) < 4:
+                continue
+
             winner_seat = win_info[0]
-            win_score = score_changes[winner_seat] # 실제 획득 점수
+            win_score = score_changes[winner_seat] if winner_seat < len(score_changes) else 0
             is_host = (winner_seat == dealer_seat)
-            
-            # 역만 기준 점수 설정
+
             yakuman_base = 48000 if is_host else 32000
-            
-            # 1. 점수 기반 티어 판정 (가장 정확함)
-            # 리치봉 등을 제외한 순수 점수 배수를 확인하기 위해 정수 나눗셈 사용
+
             multi = win_score // yakuman_base
-            
             tier = None
-            if multi >= 4: tier = f"{multi}배역만"
-            elif multi == 3: tier = "트리플역만"
-            elif multi == 2: tier = "더블역만"
-            elif multi == 1: tier = "역만"
+            if multi >= 4:
+                tier = f"{multi}배역만"
+            elif multi == 3:
+                tier = "트리플역만"
+            elif multi == 2:
+                tier = "더블역만"
+            elif multi == 1:
+                tier = "역만"
             else:
-                # 역만 미만은 기존처럼 문자열로 판정
                 score_str = str(win_info[3])
-                if "三倍満" in score_str: tier = "삼배만"
-                elif "倍満" in score_str: tier = "배만"
+                if "三倍満" in score_str:
+                    tier = "삼배만"
+                elif "倍満" in score_str:
+                    tier = "배만"
 
             if tier:
                 matched = find_user_by_alias(USERS, names[winner_seat])
                 display_name = matched["name"] if matched else names[winner_seat]
-                
-                # 2. 역 이름 수집
+
                 yaku_names = []
                 if "역만" in tier:
                     for y in win_info[4:]:
                         clean = str(y).split("(")[0]
-                        if any(k in clean for k in ["Dora", "ドラ", "Red", "赤"]): continue
+                        if any(k in clean for k in ["Dora", "ドラ", "Red", "赤"]):
+                            continue
                         yaku_names.append(YAKU_KR.get(clean, clean))
-                    
-                    # 3. 헤아림 역만 판정
+
                     if yaku_names and not any(y in REAL_YAKUMAN for y in yaku_names):
                         yaku_names = ["헤아림 역만"]
 
-                # 4. 결과 저장 (한 대국 내 최고 등급 우선)
                 existing = results.get(display_name)
                 tier_rank = {"배만": 1, "삼배만": 2, "역만": 3, "더블역만": 4, "트리플역만": 5}
-                cur_rank = tier_rank.get(tier, 6) # 4배역만 이상은 6 이상
-                
+                cur_rank = tier_rank.get(tier, 6)
+
                 if not existing or cur_rank > tier_rank.get(existing["tier"], 0):
                     results[display_name] = {"tier": tier, "yakus": yaku_names}
-                
+
     return results
 
 
@@ -471,7 +477,10 @@ def get_game_detail(ref):
                 # 판수/부수 추출 (raw result block에서)
                 try:
                     result_block = rnd.logObj[4 + 3 * player_count]
-                    for entry in result_block[2::2]:
+                    # [패치#9] 오야 seat 계산
+                    dealer_seat = rnd.logObj[0][0] % 4 if rnd.logObj and rnd.logObj[0] else -1
+
+                    for k, entry in enumerate(result_block[2::2]):
                         if isinstance(entry, list) and len(entry) > 3:
                             score_str = str(entry[3])
                             han_val = 0
@@ -483,27 +492,48 @@ def get_game_detail(ref):
                             fu_m = re.findall(r'(\d+)符', score_str)
                             if fu_m:
                                 fu_val = int(fu_m[0])
-                            # 더블역만 이상을 먼저 체크 (役満 포함 문자열이므로 순서 중요)
-                            ym_multi = re.findall(r'(\d+)倍役満', score_str)
-                            if ym_multi:
-                                n = int(ym_multi[0])
-                                if n == 2: tier = "더블역만"
-                                elif n == 3: tier = "트리플역만"
-                                else: tier = f"{n}배역만"
-                            elif 'ダブル役満' in score_str:
-                                tier = "더블역만"
-                            elif 'トリプル役満' in score_str:
-                                tier = "트리플역만"
-                            elif '役満' in score_str:
-                                tier = "역만"
-                            elif '三倍満' in score_str:
-                                tier = "삼배만"
-                            elif '倍満' in score_str:
-                                tier = "배만"
-                            elif '跳満' in score_str:
-                                tier = "하네만"
-                            elif '満貫' in score_str:
-                                tier = "만관"
+
+                            # [패치#9] 점수 기반 우선 판정 (gamelogs와 일관)
+                            win_seat = entry[0] if len(entry) > 0 else -1
+                            win_score = 0
+                            try:
+                                sc_arr = result_block[1 + 2 * k]
+                                if isinstance(sc_arr, list) and 0 <= win_seat < len(sc_arr):
+                                    win_score = sc_arr[win_seat]
+                            except (IndexError, TypeError):
+                                pass
+
+                            is_host = (win_seat == dealer_seat)
+                            yakuman_base = 48000 if is_host else 32000
+
+                            if win_score > 0 and win_score >= yakuman_base:
+                                multi = win_score // yakuman_base
+                                if multi >= 4: tier = f"{multi}배역만"
+                                elif multi == 3: tier = "트리플역만"
+                                elif multi == 2: tier = "더블역만"
+                                else: tier = "역만"
+                            else:
+                                # 문자열 fallback
+                                ym_multi = re.findall(r'(\d+)倍役満', score_str)
+                                if ym_multi:
+                                    n = int(ym_multi[0])
+                                    if n == 2: tier = "더블역만"
+                                    elif n == 3: tier = "트리플역만"
+                                    else: tier = f"{n}배역만"
+                                elif 'ダブル役満' in score_str:
+                                    tier = "더블역만"
+                                elif 'トリプル役満' in score_str:
+                                    tier = "트리플역만"
+                                elif '役満' in score_str:
+                                    tier = "역만"
+                                elif '三倍満' in score_str:
+                                    tier = "삼배만"
+                                elif '倍満' in score_str:
+                                    tier = "배만"
+                                elif '跳満' in score_str:
+                                    tier = "하네만"
+                                elif '満貫' in score_str:
+                                    tier = "만관"
                             han_fu_info.append({"han": han_val, "fu": fu_val, "tier": tier})
                 except Exception:
                     pass
@@ -909,18 +939,28 @@ def get_profile(player_name):
         season_param = request.args.get("season", str(db.get_current_season()))
         import statistics as stat_mod
 
+        # [개선#6] 다중시즌 캐시
+        profile_cache_key = make_cache_key("profile", player_name, season_param)
+        cached_profile = cache.get(profile_cache_key)
+        if cached_profile is not None:
+            return jsonify(cached_profile)
+
         # 1. 사전 계산 데이터 조회
         precomputed = get_precomputed_stats(db, season_param)
         stats = precomputed.get("stats", {}) if precomputed else {}
 
-        # 2. [수정] 사전 데이터가 없는 경우(다중 시즌 등) 실시간 연산 수행
+        # 2. [다중시즌 fallback] 사전 데이터가 없는 경우 — 캐싱 추가
         if not stats:
-            data = db.fetch_game_logs_for_stats(season_param)
-            if data:
-                from services.precompute import _compute_all_player_stats
-                # 실시간 계산 시에도 시간순 정렬 보장
-                data_sorted = sorted(data, key=lambda x: x.get("title", ["", ""])[1] if len(x.get("title", [])) > 1 else "")
-                stats = _compute_all_player_stats(data_sorted)
+            profile_cache_key = make_cache_key("profile_stats", season_param)
+            cached_stats = cache.get(profile_cache_key)
+            if cached_stats:
+                stats = cached_stats
+            else:
+                data = db.fetch_game_logs_for_stats(season_param)
+                if data:
+                    from services.precompute import _compute_all_player_stats
+                    stats = _compute_all_player_stats(data)
+                    cache.set(profile_cache_key, stats, ttl=300)
 
         player_stats = stats.get(player_name)
         if not player_stats or player_stats.get("games", 0) == 0:
@@ -1064,7 +1104,9 @@ def get_profile(player_name):
             elif not is_upper and z < threshold:
                 tags.append({"name": name, "color": color, "tooltip": tooltip, "axis": "bonus"})
 
-        return jsonify({"player": player_name, "profile": profile, "tags": tags})
+        result = {"player": player_name, "profile": profile, "tags": tags}
+        cache.set(profile_cache_key, result, ttl=300)
+        return jsonify(result)
     except Exception as e:
         logger.error("Error computing profile for %s", player_name, exc_info=e)
         return jsonify({"error": "Failed to compute profile"}), 500
