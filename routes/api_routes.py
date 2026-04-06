@@ -214,32 +214,31 @@ def get_game_logs():
         date_to = request.args.get("date_to", "")
         player_filter = request.args.get("player", "")
 
-        data = db.fetch_game_logs(season_param, lightweight=False)
-        if not data:
+        # 1. DB 쿼리용 필터 구성
+        filters = {
+            "date_from": date_from,
+            "date_to": date_to + " 23:59:59" if len(date_to) == 10 else date_to,
+            "aliases": None
+        }
+
+        # 2. 유저 필터 처리 (별명 세트 구성)
+        if player_filter:
+            user = find_user_by_alias(USERS, player_filter) or \
+                   next((u for u in USERS if u["name"] == player_filter), None)
+            if user:
+                filters["aliases"] = set(user.get("aliases", [player_filter]))
+
+        # 3. [핵심] DB 레벨에서 필터링 + 페이징된 데이터 가져오기
+        page_data, total = db.fetch_game_logs_paged(
+            season_param, page=page, per_page=per_page, filters=filters
+        )
+
+        if not page_data and page == 1:
             return jsonify({"error": "No game data found"}), 404
 
-        sorted_data = sorted(data, key=lambda x: x.get("title", ["", ""])[1], reverse=True)
-
-        # 날짜 필터
-        if date_from:
-            sorted_data = [d for d in sorted_data if (d.get("title", ["", ""])[1] if len(d.get("title", [])) > 1 else "") >= date_from]
-        if date_to:
-            # date picker는 YYYY-MM-DD를 보내므로 시간 보정
-            date_to_cmp = date_to + " 23:59:59" if len(date_to) == 10 else date_to
-            sorted_data = [d for d in sorted_data if (d.get("title", ["", ""])[1] if len(d.get("title", [])) > 1 else "") <= date_to_cmp]
-
-        # 유저 필터
-        if player_filter:
-            user = find_user_by_alias(USERS, player_filter) or next((u for u in USERS if u["name"] == player_filter), None)
-            if user:
-                aliases = set(user.get("aliases", [player_filter]))
-                sorted_data = [d for d in sorted_data if any(n in aliases for n in d.get("name", []))]
-
-        total = len(sorted_data)
+        # 4. 페이지네이션 정보 계산
         total_pages = max(1, (total + per_page - 1) // per_page)
         page = max(1, min(page, total_pages))
-        start = (page - 1) * per_page
-        page_data = sorted_data[start:start + per_page]
 
         logs = []
         for game_log in page_data:
@@ -248,6 +247,7 @@ def get_game_logs():
             names = game_log.get("name", [])
             sc = game_log.get("sc", [])
 
+            # 플레이어 정보 정리 (이 부분은 가벼우므로 유지)
             players = []
             for i in range(min(4, len(names))):
                 score = sc[i * 2] if i * 2 < len(sc) else 0
@@ -257,7 +257,7 @@ def get_game_logs():
                 players.append({"name": display_name, "score": score, "point": point})
             players.sort(key=lambda p: -p["score"])
 
-            # 배만/삼배만/역만 감지
+            # [최적화 적용] 무거운 파서 없이 원본 로그 분석
             big_hands = _detect_big_hands(game_log)
 
             logs.append({
@@ -270,7 +270,6 @@ def get_game_logs():
                 "big_hands": big_hands,
             })
 
-        # 시즌 날짜 범위 계산
         season_dates = _get_season_dates(db, season_param)
 
         return jsonify({
@@ -284,8 +283,6 @@ def get_game_logs():
             "season_dates": season_dates,
         })
 
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
     except Exception as e:
         logger.error("Error fetching game logs", exc_info=e)
         return jsonify({"error": "Failed to fetch game logs"}), 500
