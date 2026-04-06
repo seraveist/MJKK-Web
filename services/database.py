@@ -108,7 +108,10 @@ class DatabaseService:
         return data
         
     # services/database.py 에 추가/수정
-    
+    def fetch_game_logs_for_stats(self, season_param):
+        """통계 계산용 전체 로그 조회 (lightweight=False)"""
+        return self.fetch_game_logs(season_param, lightweight=False)
+        
     def fetch_game_logs_paged(self, season_param, page=1, per_page=30, filters=None):
         """
         시즌 필터와 추가 필터(날짜, 유저)를 결합하여 
